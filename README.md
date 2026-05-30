@@ -87,7 +87,11 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `POST /api/papers/generate`
 - `POST /api/answer-sheets/qrcode`
 - `POST /api/answer-sheets/layout`
+- `GET /api/answer-sheets/layouts`
+- `GET /api/answer-sheets/layouts/:layoutId`
 - `POST /api/grading/uploads`
+- `GET /api/grading/records`
+- `GET /api/grading/records/:uploadId`
 - `GET /api/knowledge-points`
 
 ## 嵌入方式
@@ -103,13 +107,14 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 
 ## 答题卡与批改
 
-- `POST /api/answer-sheets/layout`：入参包含 `paperId`、`studentId`、`assignmentId`、`templateVersion`、`questions`，返回二维码 DataURL 与 Layout JSON。
+- `POST /api/answer-sheets/layout`：入参包含 `paperId`、`studentId`、`assignmentId`、`templateVersion`、`questions`，返回二维码 DataURL 与 Layout JSON，并保存布局记录。
 - Layout JSON 使用毫米坐标，包含页面尺寸、四角定位点、二维码区域、学生信息区、每题答题区域；客观题包含选项圆心坐标，主观题包含答题框坐标。
-- `POST /api/grading/uploads`：使用 multipart/form-data 上传 `file`，可附带 `questions`、`answerSheetLayout`、`studentId`、`studentName`、`assignmentId`、`paperId`；接口保存原图到 `server/uploads/grading`，返回模拟填涂识别、客观题判分、错题列表与主观题待复核数量。
+- `POST /api/grading/uploads`：使用 multipart/form-data 上传 `file`，可附带 `questions`、`answerSheetLayout`、`studentId`、`studentName`、`assignmentId`、`paperId`；接口保存原图到 `server/uploads/grading`，返回并保存模拟填涂识别、客观题判分、错题列表与主观题待复核数量。
+- `GET /api/answer-sheets/layouts` 与 `GET /api/grading/records` 支持按 `studentId`、`assignmentId`、`paperId` 查询历史布局和批改记录。
 
 ## MySQL 存储切换
 
-默认仍使用 `server/data/questions.json`，保证本地演示可用。需要切换到 MySQL 时先执行 `database-schema.sql`，再配置：
+默认仍使用 `server/data/questions.json`、`server/data/answer-sheet-layouts.json`、`server/data/grading-records.json`，保证本地演示可用。需要切换到 MySQL 时先执行 `database-schema.sql`，再配置：
 
 ```bash
 STORAGE_DRIVER=mysql

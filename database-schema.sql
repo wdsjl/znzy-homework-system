@@ -149,3 +149,68 @@ CREATE TABLE paper_question (
   CONSTRAINT fk_pq_question FOREIGN KEY (question_id) REFERENCES question(id),
   UNIQUE KEY uk_paper_question (paper_id, question_id)
 );
+
+CREATE TABLE answer_sheet_layout (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  layout_no VARCHAR(64) NOT NULL UNIQUE,
+  paper_no VARCHAR(64) NOT NULL,
+  student_no VARCHAR(64),
+  assignment_no VARCHAR(64),
+  template_version VARCHAR(64) NOT NULL DEFAULT 'answer-sheet-v1',
+  layout_json JSON NOT NULL COMMENT 'A4 页面、定位点、二维码区、每题答题区域坐标',
+  qr_payload_json JSON NOT NULL COMMENT 'paperId/studentId/assignmentId/templateVersion',
+  qr_data_url MEDIUMTEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_layout_paper (paper_no),
+  INDEX idx_layout_student_assignment (student_no, assignment_no)
+);
+
+CREATE TABLE grading_submission (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  upload_no VARCHAR(64) NOT NULL UNIQUE,
+  paper_no VARCHAR(64),
+  assignment_no VARCHAR(64),
+  student_no VARCHAR(64),
+  student_name VARCHAR(64),
+  file_name VARCHAR(255),
+  image_url VARCHAR(500),
+  recognition_engine VARCHAR(64),
+  recognized_json JSON,
+  grading_json JSON,
+  score DECIMAL(8,2) NOT NULL DEFAULT 0,
+  total_score DECIMAL(8,2) NOT NULL DEFAULT 0,
+  objective_score DECIMAL(8,2) NOT NULL DEFAULT 0,
+  objective_full_score DECIMAL(8,2) NOT NULL DEFAULT 0,
+  accuracy DECIMAL(6,2) NOT NULL DEFAULT 0,
+  manual_review_count INT NOT NULL DEFAULT 0,
+  feedback TEXT,
+  status VARCHAR(32) NOT NULL DEFAULT 'graded' COMMENT 'graded/manual_review/done',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_grading_student (student_no),
+  INDEX idx_grading_assignment (assignment_no),
+  INDEX idx_grading_paper (paper_no),
+  INDEX idx_grading_status (status)
+);
+
+CREATE TABLE grading_question_result (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  upload_no VARCHAR(64) NOT NULL,
+  question_no INT NOT NULL,
+  question_id VARCHAR(64),
+  question_type VARCHAR(32),
+  result_kind VARCHAR(32) COMMENT 'objective/subjective',
+  recognized_answer TEXT,
+  correct_answer TEXT,
+  score DECIMAL(6,2) NOT NULL DEFAULT 0,
+  full_score DECIMAL(6,2) NOT NULL DEFAULT 0,
+  is_correct TINYINT NULL,
+  status VARCHAR(32) NOT NULL COMMENT 'correct/wrong/needs_manual_review',
+  result_json JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_gqr_upload (upload_no),
+  INDEX idx_gqr_question (question_id),
+  CONSTRAINT fk_gqr_upload FOREIGN KEY (upload_no) REFERENCES grading_submission(upload_no) ON DELETE CASCADE
+);
+

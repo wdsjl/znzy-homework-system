@@ -13,6 +13,7 @@ const {
   mockRecognizeAnswers,
 } = require('./answer-sheet.cjs');
 const { createQuestionStore } = require('./question-store.cjs');
+const { createGradingStore } = require('./grading-store.cjs');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -20,6 +21,7 @@ const dataFile = path.join(__dirname, 'data', 'questions.json');
 const uploadDir = path.join(__dirname, 'uploads', 'grading');
 const port = process.env.API_PORT || 4000;
 const questionStore = createQuestionStore({ dataFile });
+const gradingStore = createGradingStore({ dataDir: path.join(__dirname, 'data') });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -178,7 +180,20 @@ app.post('/api/answer-sheets/qrcode', async (req, res) => {
 app.post('/api/answer-sheets/layout', async (req, res) => {
   const layout = buildAnswerSheetLayout(req.body || {});
   const qrDataUrl = await createQrDataUrl(layout.qr.payload);
-  res.json({ data: { layout, qrPayload: layout.qr.payload, qrDataUrl } });
+  const saved = await gradingStore.saveLayout(layout, qrDataUrl);
+  res.json({ data: { layout, qrPayload: layout.qr.payload, qrDataUrl, saved } });
+});
+
+app.get('/api/answer-sheets/layouts', async (req, res) => {
+  const rows = await gradingStore.listLayouts(req.query);
+  res.json({ data: rows, total: rows.length });
+});
+
+app.get('/api/answer-sheets/layouts/:layoutId', async (req, res) => {
+  const rows = await gradingStore.listLayouts({ ...req.query, layoutId: req.params.layoutId });
+  const row = rows.find((item) => item.layoutId === req.params.layoutId);
+  if (!row) return res.status(404).json({ message: '答题卡布局不存在' });
+  res.json({ data: row });
 });
 
 app.post('/api/grading/uploads', upload.single('file'), async (req, res) => {
@@ -205,35 +220,47 @@ app.post('/api/grading/uploads', upload.single('file'), async (req, res) => {
     .filter((item) => item.kind === 'objective' && !item.correct)
     .map((item) => `${item.questionNo}题`);
 
-  res.json({
-    data: {
-      uploadId,
-      fileName: req.file.originalname,
-      imageUrl: `/uploads/grading/${storedName}`,
-      storedFileName: storedName,
-      studentId: req.body.studentId || '',
-      studentName: req.body.studentName || '',
-      assignmentId: req.body.assignmentId || '',
-      paperId: req.body.paperId || '',
-      answerSheetLayout,
-      recognized: {
-        engine: providedAnswers ? 'provided-json' : 'mock-bubble-recognition',
-        answers: recognizedAnswers,
-      },
-      grading: {
-        ...grading,
-        score,
-        totalScore,
-        accuracy,
-        wrong,
-        manualReviewCount: grading.details.filter((item) => item.status === 'needs_manual_review').length,
-      },
-      feedback: wrong.length
-        ? `客观题已自动判分，需重点复查：${wrong.join('、')}。主观题进入人工/AI 复核队列。`
-        : '客观题全部正确，主观题进入人工/AI 复核队列。',
-      createdAt: new Date().toISOString(),
+  const record = {
+    uploadId,
+    fileName: req.file.originalname,
+    imageUrl: `/uploads/grading/${storedName}`,
+    storedFileName: storedName,
+    studentId: req.body.studentId || '',
+    studentName: req.body.studentName || '',
+    assignmentId: req.body.assignmentId || '',
+    paperId: req.body.paperId || '',
+    answerSheetLayout,
+    recognized: {
+      engine: providedAnswers ? 'provided-json' : 'mock-bubble-recognition',
+      answers: recognizedAnswers,
     },
-  });
+    grading: {
+      ...grading,
+      score,
+      totalScore,
+      accuracy,
+      wrong,
+      manualReviewCount: grading.details.filter((item) => item.status === 'needs_manual_review').length,
+    },
+    feedback: wrong.length
+      ? `客观题已自动判分，需重点复查：${wrong.join('、')}。主观题进入人工/AI 复核队列。`
+      : '客观题全部正确，主观题进入人工/AI 复核队列。',
+    createdAt: new Date().toISOString(),
+  };
+  const saved = await gradingStore.saveGradingRecord(record);
+  res.json({ data: { ...record, saved: { uploadId: saved.uploadId, status: saved.status } } });
+});
+
+app.get('/api/grading/records', async (req, res) => {
+  const rows = await gradingStore.listGradingRecords(req.query);
+  res.json({ data: rows, total: rows.length });
+});
+
+app.get('/api/grading/records/:uploadId', async (req, res) => {
+  const rows = await gradingStore.listGradingRecords({ ...req.query, uploadId: req.params.uploadId });
+  const row = rows.find((item) => item.uploadId === req.params.uploadId);
+  if (!row) return res.status(404).json({ message: '批改记录不存在' });
+  res.json({ data: row });
 });
 
 app.listen(port, () => {
