@@ -5,28 +5,25 @@ const mammoth = require('mammoth');
 const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
+const {
+  buildAnswerSheetLayout,
+  buildQrPayload,
+  createQrDataUrl,
+  gradeObjectiveAnswers,
+  mockRecognizeAnswers,
+} = require('./answer-sheet.cjs');
+const { createQuestionStore } = require('./question-store.cjs');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const dataFile = path.join(__dirname, 'data', 'questions.json');
+const uploadDir = path.join(__dirname, 'uploads', 'grading');
 const port = process.env.API_PORT || 4000;
+const questionStore = createQuestionStore({ dataFile });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-
-async function readQuestions() {
-  try {
-    const text = await fs.readFile(dataFile, 'utf-8');
-    return JSON.parse(text);
-  } catch {
-    return [];
-  }
-}
-
-async function writeQuestions(rows) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(rows, null, 2), 'utf-8');
-}
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 function parseQuestions(text) {
   const sections = String(text || '').split(/(?=^[一二三四五六七八九十]+、)/m);
@@ -63,22 +60,39 @@ function parseQuestions(text) {
   return result;
 }
 
-app.get('/api/health', (_, res) => res.json({ ok: true, service: 'znzy-question-api' }));
+function safeJson(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function sanitizeFileName(name = 'answer-sheet.jpg') {
+  return String(name).replace(/[^\w.-]+/g, '_').slice(-120) || 'answer-sheet.jpg';
+}
+
+function normalizeQuestionForGrading(question, index) {
+  return {
+    id: question.id ?? index + 1,
+    type: question.type || question.questionType || '解答题',
+    stem: question.stem || '',
+    answer: question.answer ?? question.ans ?? question.correctAnswer ?? '',
+    score: Number(question.score || question.points || 0),
+  };
+}
+
+app.get('/api/health', (_, res) => res.json({ ok: true, service: 'znzy-question-api', storage: questionStore.mode() }));
 
 app.get('/api/questions', async (req, res) => {
-  const rows = await readQuestions();
-  const { type, subject, keyword, knowledge } = req.query;
-  const filtered = rows.filter((q) =>
-    (!type || type === '全部' || q.type === type) &&
-    (!subject || subject === '全部' || q.subject === subject) &&
-    (!knowledge || knowledge === '全部' || q.knowledge === knowledge) &&
-    (!keyword || `${q.stem}${q.answer}${q.analysis}${q.knowledge}`.includes(keyword))
-  );
+  const filtered = await questionStore.listQuestions(req.query);
   res.json({ data: filtered, total: filtered.length });
 });
 
 app.get('/api/knowledge-points', async (_, res) => {
-  const rows = await readQuestions();
+  const rows = await questionStore.listQuestions();
   const map = new Map();
   for (const q of rows) {
     const subject = q.subject || '未分类';
@@ -90,7 +104,6 @@ app.get('/api/knowledge-points', async (_, res) => {
 });
 
 app.post('/api/questions', async (req, res) => {
-  const rows = await readQuestions();
   const body = Array.isArray(req.body) ? req.body : [req.body];
   const saved = body.map((item) => ({
     id: item.id || crypto.randomUUID(),
@@ -108,23 +121,20 @@ app.post('/api/questions', async (req, res) => {
     status: '已入库',
     createdAt: item.createdAt || new Date().toISOString().slice(0, 10),
   }));
-  await writeQuestions([...saved, ...rows]);
-  res.json({ data: saved, total: rows.length + saved.length });
+  const rows = await questionStore.createQuestions(saved);
+  const total = (await questionStore.listQuestions()).length;
+  res.json({ data: rows, total });
 });
 
 app.put('/api/questions/:id', async (req, res) => {
-  const rows = await readQuestions();
-  const idx = rows.findIndex((q) => q.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: '题目不存在' });
-  rows[idx] = { ...rows[idx], ...req.body, id: req.params.id, updatedAt: new Date().toISOString().slice(0, 10) };
-  await writeQuestions(rows);
-  res.json({ data: rows[idx] });
+  const row = await questionStore.updateQuestion(req.params.id, req.body);
+  if (!row) return res.status(404).json({ message: '题目不存在' });
+  res.json({ data: row });
 });
 
 app.delete('/api/questions/:id', async (req, res) => {
-  const rows = await readQuestions();
-  const next = rows.filter((q) => q.id !== req.params.id);
-  await writeQuestions(next);
+  await questionStore.deleteQuestion(req.params.id);
+  const next = await questionStore.listQuestions();
   res.json({ ok: true, total: next.length });
 });
 
@@ -141,7 +151,7 @@ app.post('/api/question-import/docx', upload.single('file'), async (req, res) =>
 });
 
 app.post('/api/papers/generate', async (req, res) => {
-  const rows = await readQuestions();
+  const rows = await questionStore.listQuestions();
   const { subject, type, count = 5, knowledge } = req.body || {};
   const pool = rows.filter((q) =>
     (!subject || q.subject === subject) &&
@@ -155,6 +165,73 @@ app.post('/api/papers/generate', async (req, res) => {
       title: `${subject || '理科'}智能组卷`,
       totalScore: questions.reduce((sum, q) => sum + Number(q.score || 0), 0),
       questions,
+    },
+  });
+});
+
+app.post('/api/answer-sheets/qrcode', async (req, res) => {
+  const payload = buildQrPayload(req.body || {});
+  const qrDataUrl = await createQrDataUrl(payload);
+  res.json({ data: { payload, qrDataUrl } });
+});
+
+app.post('/api/answer-sheets/layout', async (req, res) => {
+  const layout = buildAnswerSheetLayout(req.body || {});
+  const qrDataUrl = await createQrDataUrl(layout.qr.payload);
+  res.json({ data: { layout, qrPayload: layout.qr.payload, qrDataUrl } });
+});
+
+app.post('/api/grading/uploads', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: '缺少答题卡图片' });
+
+  await fs.mkdir(uploadDir, { recursive: true });
+  const uploadId = crypto.randomUUID();
+  const ext = path.extname(req.file.originalname || '') || '.jpg';
+  const storedName = `${uploadId}${ext}`;
+  const storedPath = path.join(uploadDir, storedName);
+  await fs.writeFile(storedPath, req.file.buffer);
+
+  const questions = safeJson(req.body.questions, []).map(normalizeQuestionForGrading);
+  const answerSheetLayout = safeJson(req.body.answerSheetLayout || req.body.layoutJson, null);
+  const providedAnswers = safeJson(req.body.recognizedAnswers, null);
+  const recognizedAnswers = providedAnswers || mockRecognizeAnswers(questions, `${uploadId}:${sanitizeFileName(req.file.originalname)}`);
+  const grading = gradeObjectiveAnswers(questions, recognizedAnswers);
+  const totalScore = questions.reduce((sum, question) => sum + Number(question.score || question.points || 0), 0);
+  const score = grading.objectiveScore;
+  const accuracy = grading.objectiveFullScore
+    ? Math.round((grading.objectiveScore / grading.objectiveFullScore) * 100)
+    : 0;
+  const wrong = grading.details
+    .filter((item) => item.kind === 'objective' && !item.correct)
+    .map((item) => `${item.questionNo}题`);
+
+  res.json({
+    data: {
+      uploadId,
+      fileName: req.file.originalname,
+      imageUrl: `/uploads/grading/${storedName}`,
+      storedFileName: storedName,
+      studentId: req.body.studentId || '',
+      studentName: req.body.studentName || '',
+      assignmentId: req.body.assignmentId || '',
+      paperId: req.body.paperId || '',
+      answerSheetLayout,
+      recognized: {
+        engine: providedAnswers ? 'provided-json' : 'mock-bubble-recognition',
+        answers: recognizedAnswers,
+      },
+      grading: {
+        ...grading,
+        score,
+        totalScore,
+        accuracy,
+        wrong,
+        manualReviewCount: grading.details.filter((item) => item.status === 'needs_manual_review').length,
+      },
+      feedback: wrong.length
+        ? `客观题已自动判分，需重点复查：${wrong.join('、')}。主观题进入人工/AI 复核队列。`
+        : '客观题全部正确，主观题进入人工/AI 复核队列。',
+      createdAt: new Date().toISOString(),
     },
   });
 });
