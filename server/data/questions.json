@@ -1,0 +1,34 @@
+[
+  {
+    "id": "qdb1",
+    "section": "一、单选题",
+    "type": "单选题",
+    "stem": "下列函数中，图象经过原点的是（ ）",
+    "options": ["y=2x", "y=x+1", "y=1/x", "y=x²+1"],
+    "answer": "A",
+    "analysis": "正比例函数y=2x经过原点。",
+    "subject": "数学",
+    "knowledge": "函数基础",
+    "difficulty": "简单",
+    "score": 5,
+    "source": "服务端样例题库",
+    "status": "已入库",
+    "createdAt": "2026-05-27"
+  },
+  {
+    "id": "qdb2",
+    "section": "二、多选题",
+    "type": "多选题",
+    "stem": "下列关于串联电路的说法正确的是（ ）",
+    "options": ["电流处处相等", "总电压等于各部分电压之和", "总电阻小于任一电阻", "电压分配与电阻有关"],
+    "answer": "ABD",
+    "analysis": "串联电路电流相等，总电压为分压之和，分压与电阻成正比。",
+    "subject": "物理",
+    "knowledge": "串联电路",
+    "difficulty": "中等",
+    "score": 8,
+    "source": "服务端样例题库",
+    "status": "已入库",
+    "createdAt": "2026-05-27"
+  }
+]
