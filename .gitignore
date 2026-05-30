@@ -10,3 +10,5 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 server/uploads/
+server/data/answer-sheet-layouts.json
+server/data/grading-records.json
