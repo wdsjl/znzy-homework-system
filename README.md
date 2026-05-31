@@ -94,6 +94,8 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `GET /api/grading/records/:uploadId`
 - `PATCH /api/grading/records/:uploadId/review`
 - `GET /api/knowledge-points`
+- `GET /api/students/:studentId/profile`
+- `GET /api/student-profile`
 
 ## 嵌入方式
 
@@ -128,6 +130,12 @@ MYSQL_DATABASE=learning_diagnosis
 ```
 
 也可以使用 `DATABASE_URL`。未配置或 MySQL 不可用时会回退到 JSON；若需要严格失败，设置 `STORAGE_STRICT=1`。
+
+## 学生画像接口
+
+- `GET /api/students/:studentId/profile` 会聚合批改记录，输出最近正确率、平均得分率、待复核数量、薄弱点、风险标签和推荐动作。
+- 返回中的 `volunteerProfile` 可直接给志愿填报系统使用，包含 `academicSignal`、`scienceReadinessScore`、`riskTags`、`focusAreas` 和 `suggestedActions`。
+- 前端学情报告页会展示该画像，并通过嵌入消息同步给宿主系统。
 
 ## 下一步建议
 

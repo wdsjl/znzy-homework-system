@@ -77,6 +77,10 @@ npm run dev:all
 五、解答题
 ```
 
+## 学生画像接口
+
+已新增 `GET /api/students/:studentId/profile` 和 `GET /api/student-profile`，用于向志愿填报系统输出学业画像。画像基于批改记录聚合正确率、薄弱点、待复核风险、推荐动作和 `volunteerProfile` 摘要。
+
 ## 下一步任务建议
 
 请优先继续实现：
@@ -95,8 +99,8 @@ npm run dev:all
 3. 文件存储正式化
    - 将 `server/uploads/grading` 替换为 OSS / MinIO。
 
-4. 志愿填报系统画像接口
-   - 将作业薄弱点、知识点掌握度、趋势数据同步到学生画像。
+4. 志愿填报系统画像接口增强
+   - 后续可接入考试、课堂表现和选科/专业倾向数据，形成更完整画像。
 
 ## 注意事项
 

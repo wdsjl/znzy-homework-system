@@ -14,6 +14,7 @@ const {
 } = require('./answer-sheet.cjs');
 const { createQuestionStore } = require('./question-store.cjs');
 const { createGradingStore } = require('./grading-store.cjs');
+const { buildStudentProfile } = require('./student-profile.cjs');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -249,6 +250,28 @@ app.post('/api/grading/uploads', upload.single('file'), async (req, res) => {
   };
   const saved = await gradingStore.saveGradingRecord(record);
   res.json({ data: { ...record, saved: { uploadId: saved.uploadId, status: saved.status } } });
+});
+
+
+app.get('/api/students/:studentId/profile', async (req, res) => {
+  const records = await gradingStore.listGradingRecords({ studentId: req.params.studentId, assignmentId: req.query.assignmentId });
+  const profile = buildStudentProfile({
+    studentId: req.params.studentId,
+    studentName: req.query.studentName || '',
+    records,
+  });
+  res.json({ data: profile });
+});
+
+app.get('/api/student-profile', async (req, res) => {
+  const studentId = req.query.studentId || '';
+  const records = await gradingStore.listGradingRecords({ studentId, assignmentId: req.query.assignmentId });
+  const profile = buildStudentProfile({
+    studentId,
+    studentName: req.query.studentName || '',
+    records,
+  });
+  res.json({ data: profile });
 });
 
 app.get('/api/grading/records', async (req, res) => {
