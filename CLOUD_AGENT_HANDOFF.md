@@ -26,8 +26,9 @@
 16. 已提供拍照上传批改接口，保存原图并返回模拟识别结果。
 17. 已实现客观题自动判分，主观题进入待复核队列。
 18. 已新增答题卡布局与批改记录持久化，支持 JSON / MySQL。
-19. 前端支持 iframe / web-view 嵌入模式，并读取 `studentId`、`studentName`、`assignmentId`、`token`。
-20. 已提供 `database-schema.sql` 作为正式 MySQL 数据库结构草案，并新增 MySQL 存储适配。
+19. 已新增主观题人工复核接口和前端演示入口，可更新总分、正确率和记录状态。
+20. 前端支持 iframe / web-view 嵌入模式，并读取 `studentId`、`studentName`、`assignmentId`、`token`。
+21. 已提供 `database-schema.sql` 作为正式 MySQL 数据库结构草案，并新增 MySQL 存储适配。
 
 ## 重要文件
 
@@ -80,7 +81,7 @@ npm run dev:all
 
 请优先继续实现：
 
-已完成本轮优先项：真实二维码、Layout JSON、拍照上传批改、客观题自动判分、小程序参数适配、MySQL 存储适配，并补齐布局/批改记录可查询持久化。
+已完成本轮优先项：真实二维码、Layout JSON、拍照上传批改、客观题自动判分、主观题人工复核演示、小程序参数适配、MySQL 存储适配，并补齐布局/批改记录可查询持久化。
 
 后续建议继续：
 

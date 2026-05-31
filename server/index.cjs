@@ -256,6 +256,13 @@ app.get('/api/grading/records', async (req, res) => {
   res.json({ data: rows, total: rows.length });
 });
 
+
+app.patch('/api/grading/records/:uploadId/review', async (req, res) => {
+  const row = await gradingStore.reviewGradingRecord(req.params.uploadId, req.body || {});
+  if (!row) return res.status(404).json({ message: '批改记录不存在' });
+  res.json({ data: row });
+});
+
 app.get('/api/grading/records/:uploadId', async (req, res) => {
   const rows = await gradingStore.listGradingRecords({ ...req.query, uploadId: req.params.uploadId });
   const row = rows.find((item) => item.uploadId === req.params.uploadId);

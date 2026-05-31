@@ -92,6 +92,7 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `POST /api/grading/uploads`
 - `GET /api/grading/records`
 - `GET /api/grading/records/:uploadId`
+- `PATCH /api/grading/records/:uploadId/review`
 - `GET /api/knowledge-points`
 
 ## 嵌入方式
@@ -111,6 +112,7 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - Layout JSON 使用毫米坐标，包含页面尺寸、四角定位点、二维码区域、学生信息区、每题答题区域；客观题包含选项圆心坐标，主观题包含答题框坐标。
 - `POST /api/grading/uploads`：使用 multipart/form-data 上传 `file`，可附带 `questions`、`answerSheetLayout`、`studentId`、`studentName`、`assignmentId`、`paperId`；接口保存原图到 `server/uploads/grading`，返回并保存模拟填涂识别、客观题判分、错题列表与主观题待复核数量。
 - `GET /api/answer-sheets/layouts` 与 `GET /api/grading/records` 支持按 `studentId`、`assignmentId`、`paperId` 查询历史布局和批改记录。
+- `PATCH /api/grading/records/:uploadId/review` 支持提交主观题人工复核分数，接口会重新计算总分、正确率、待复核数量和批改状态。
 
 ## MySQL 存储切换
 

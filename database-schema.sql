@@ -178,6 +178,7 @@ CREATE TABLE grading_submission (
   recognition_engine VARCHAR(64),
   recognized_json JSON,
   grading_json JSON,
+  review_json JSON COMMENT '主观题人工复核记录',
   score DECIMAL(8,2) NOT NULL DEFAULT 0,
   total_score DECIMAL(8,2) NOT NULL DEFAULT 0,
   objective_score DECIMAL(8,2) NOT NULL DEFAULT 0,
