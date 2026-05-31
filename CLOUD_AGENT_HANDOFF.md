@@ -20,16 +20,24 @@
 10. 支持标准试卷版、精简练习版、标准答题卡。
 11. 支持 A4 打印 / 另存 PDF。
 12. 答题卡支持题型分组。
-13. 答题卡支持二维码占位区。
+13. 答题卡支持真实二维码，内容包含 `paperId`、`studentId`、`assignmentId`、`templateVersion`。
 14. 答题卡支持四角定位点。
-15. 前端支持 iframe / web-view 嵌入模式。
-16. 已提供 `database-schema.sql` 作为正式 MySQL 数据库结构草案。
+15. 答题卡支持坐标映射 Layout JSON，覆盖客观题填涂区和主观题答题框。
+16. 已提供拍照上传批改接口，保存原图并返回模拟识别结果。
+17. 已实现客观题自动判分，主观题进入待复核队列。
+18. 已新增答题卡布局与批改记录持久化，支持 JSON / MySQL。
+19. 已新增主观题人工复核接口和前端演示入口，可更新总分、正确率和记录状态。
+20. 前端支持 iframe / web-view 嵌入模式，并读取 `studentId`、`studentName`、`assignmentId`、`token`。
+21. 已提供 `database-schema.sql` 作为正式 MySQL 数据库结构草案，并新增 MySQL 存储适配。
 
 ## 重要文件
 
 - `src/App.tsx`：核心前端逻辑
 - `src/styles.css`：UI、打印和答题卡样式
 - `server/index.cjs`：本地 API 服务
+- `server/answer-sheet.cjs`：二维码、答题卡坐标映射、客观题判分
+- `server/question-store.cjs`：JSON / MySQL 题库存储适配
+- `server/grading-store.cjs`：答题卡布局和批改记录 JSON / MySQL 存储适配
 - `server/data/questions.json`：服务端 JSON 题库
 - `database-schema.sql`：正式数据库表结构
 - `README.md`：项目说明
@@ -69,32 +77,38 @@ npm run dev:all
 五、解答题
 ```
 
+## 学生画像接口
+
+已新增 `GET /api/students/:studentId/profile` 和 `GET /api/student-profile`，用于向志愿填报系统输出学业画像。画像基于批改记录聚合正确率、薄弱点、待复核风险、推荐动作和 `volunteerProfile` 摘要。
+
+## 错题本与补救练习
+
+已新增 `GET /api/wrong-questions`、`POST /api/remediation/generate` 和补救练习计划接口。批改后可沉淀错题、生成再练作业，并重新进入打印/作答/批改流程。
+
+## 生产级批改链路
+
+已补充文件存储抽象、S3/MinIO/OSS 兼容配置、基于 Layout 的 OMR 采样、主观题区域裁剪、可选 Tesseract OCR、异步批改任务队列和待复核队列接口。新增 `POST /api/grading/records/:uploadId/ai-review`，可应用主观题 AI/规则初判建议分。已新增二维码解码绑定能力，上传答题卡可自动解析 paperId/studentId/assignmentId 并匹配 Layout。
+
 ## 下一步任务建议
 
 请优先继续实现：
 
-1. 真实二维码生成
-   - 为答题卡生成真实二维码。
-   - 二维码内容包括：`paperId`、`studentId`、`assignmentId`、`templateVersion`。
+已完成本轮优先项：真实二维码、Layout JSON、拍照上传批改、客观题自动判分、主观题人工复核演示、小程序参数适配、MySQL 存储适配，并补齐布局/批改记录可查询持久化。
 
-2. 答题卡坐标映射
-   - 为每个题号生成坐标区域。
-   - 输出 answer sheet layout JSON。
-   - 支持客观题填涂区和主观题答题框坐标。
+后续建议继续：
 
-3. 拍照上传批改接口
-   - 上传答题卡图片。
-   - 保存原图。
-   - 返回模拟 OCR / 填涂识别结果。
-   - 根据题目答案自动判分。
+1. 图像纠偏与真实 OCR / OMR
+   - 使用四角定位点做透视矫正。
+   - 接入真实填涂识别模型或第三方 OCR。
 
-4. 正式数据库接入
-   - 用 `database-schema.sql` 建表。
-   - 将 `server/data/questions.json` 替换成 MySQL / PostgreSQL。
+2. 主观题 AI 初判 + 人工复核
+   - 为解答题保存裁剪图、评分点和复核状态。
 
-5. 小程序 web-view 嵌入适配
-   - 支持 URL 参数：`studentId`、`studentName`、`assignmentId`、`token`。
-   - 支持向宿主系统发送 `postMessage` 事件。
+3. 文件存储正式化
+   - 将 `server/uploads/grading` 替换为 OSS / MinIO。
+
+4. 志愿填报系统画像接口增强
+   - 后续可接入考试、课堂表现和选科/专业倾向数据，形成更完整画像。
 
 ## 注意事项
 
