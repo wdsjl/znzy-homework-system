@@ -13,3 +13,4 @@ server/uploads/
 server/data/answer-sheet-layouts.json
 server/data/grading-records.json
 server/data/grading-jobs.json
+server/data/remediation-plans.json

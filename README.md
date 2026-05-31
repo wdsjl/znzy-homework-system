@@ -102,6 +102,11 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `GET /api/knowledge-points`
 - `GET /api/students/:studentId/profile`
 - `GET /api/student-profile`
+- `GET /api/wrong-questions`
+- `POST /api/remediation/generate`
+- `GET /api/remediation/plans`
+- `GET /api/remediation/plans/:id`
+- `PATCH /api/remediation/plans/:id`
 
 ## 嵌入方式
 
@@ -157,6 +162,12 @@ MYSQL_DATABASE=learning_diagnosis
 ```
 
 也可以使用 `DATABASE_URL`。未配置或 MySQL 不可用时会回退到 JSON；若需要严格失败，设置 `STORAGE_STRICT=1`。
+
+## 错题本与补救练习
+
+- `GET /api/wrong-questions` 从批改记录中沉淀客观题错题和低分主观题。
+- `POST /api/remediation/generate` 可基于某次批改记录生成错题巩固练习；优先匹配题库同题型/同知识点题目，没有匹配时生成错题回练题。
+- 前端批改结果和历史记录中提供“生成错题巩固练习/再练”入口，生成后可直接加载到作业打印流程。
 
 ## 学生画像接口
 

@@ -235,3 +235,43 @@ CREATE TABLE grading_job (
   INDEX idx_grading_job_assignment (assignment_no),
   INDEX idx_grading_job_status (status)
 );
+
+CREATE TABLE wrong_question (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  wrong_no VARCHAR(128) NOT NULL UNIQUE,
+  upload_no VARCHAR(64) NOT NULL,
+  student_no VARCHAR(64),
+  assignment_no VARCHAR(64),
+  paper_no VARCHAR(64),
+  question_id VARCHAR(64),
+  question_no INT,
+  question_type VARCHAR(32),
+  score DECIMAL(6,2) NOT NULL DEFAULT 0,
+  full_score DECIMAL(6,2) NOT NULL DEFAULT 0,
+  reason TEXT,
+  status VARCHAR(32) NOT NULL DEFAULT 'active',
+  source_json JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_wrong_student (student_no),
+  INDEX idx_wrong_assignment (assignment_no),
+  INDEX idx_wrong_upload (upload_no)
+);
+
+CREATE TABLE remediation_plan (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  plan_no VARCHAR(64) NOT NULL UNIQUE,
+  student_no VARCHAR(64),
+  assignment_no VARCHAR(64),
+  source_assignment_no VARCHAR(64),
+  source_upload_no VARCHAR(64),
+  title VARCHAR(255) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'generated' COMMENT 'generated/published/completed',
+  source_wrong_count INT NOT NULL DEFAULT 0,
+  plan_json JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_remediation_student (student_no),
+  INDEX idx_remediation_source_upload (source_upload_no),
+  INDEX idx_remediation_status (status)
+);

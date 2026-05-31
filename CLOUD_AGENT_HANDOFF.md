@@ -81,6 +81,10 @@ npm run dev:all
 
 已新增 `GET /api/students/:studentId/profile` 和 `GET /api/student-profile`，用于向志愿填报系统输出学业画像。画像基于批改记录聚合正确率、薄弱点、待复核风险、推荐动作和 `volunteerProfile` 摘要。
 
+## 错题本与补救练习
+
+已新增 `GET /api/wrong-questions`、`POST /api/remediation/generate` 和补救练习计划接口。批改后可沉淀错题、生成再练作业，并重新进入打印/作答/批改流程。
+
 ## 生产级批改链路
 
 已补充文件存储抽象、S3/MinIO/OSS 兼容配置、基于 Layout 的 OMR 采样、主观题区域裁剪、可选 Tesseract OCR、异步批改任务队列和待复核队列接口。新增 `POST /api/grading/records/:uploadId/ai-review`，可应用主观题 AI/规则初判建议分。已新增二维码解码绑定能力，上传答题卡可自动解析 paperId/studentId/assignmentId 并匹配 Layout。

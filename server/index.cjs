@@ -15,6 +15,7 @@ const {
 const { createQuestionStore } = require('./question-store.cjs');
 const { createGradingStore } = require('./grading-store.cjs');
 const { buildStudentProfile } = require('./student-profile.cjs');
+const { createRemediationStore } = require('./remediation-store.cjs');
 const { createStorage } = require('./storage.cjs');
 const { decodeQrPayload, recognizeAnswerSheet } = require('./image-recognition.cjs');
 const { createGradingJobQueue } = require('./grading-jobs.cjs');
@@ -26,6 +27,7 @@ const uploadDir = path.join(__dirname, 'uploads', 'grading');
 const port = process.env.API_PORT || 4000;
 const questionStore = createQuestionStore({ dataFile });
 const gradingStore = createGradingStore({ dataDir: path.join(__dirname, 'data') });
+const remediationStore = createRemediationStore({ dataDir: path.join(__dirname, 'data') });
 const fileStorage = createStorage({ localRoot: path.join(__dirname, 'uploads'), publicBasePath: '/uploads' });
 const gradingJobQueue = createGradingJobQueue({ dataDir: path.join(__dirname, 'data'), processSubmission: processGradingSubmission });
 gradingJobQueue.loadJobs();
@@ -363,6 +365,48 @@ app.get('/api/grading/jobs/:jobId', async (req, res) => {
   res.json({ data: job });
 });
 
+
+
+app.get('/api/wrong-questions', async (req, res) => {
+  const records = await gradingStore.listGradingRecords(req.query);
+  const rows = await remediationStore.listWrongQuestions(records, req.query);
+  res.json({ data: rows, total: rows.length });
+});
+
+app.post('/api/remediation/generate', async (req, res) => {
+  const records = await gradingStore.listGradingRecords({
+    studentId: req.body?.studentId || '',
+    assignmentId: req.body?.assignmentId || '',
+    uploadId: req.body?.uploadId || '',
+  });
+  const plan = await remediationStore.createRemediationPlan({
+    records,
+    questionStore,
+    studentId: req.body?.studentId || '',
+    assignmentId: req.body?.assignmentId || '',
+    uploadId: req.body?.uploadId || '',
+    count: req.body?.count || 6,
+  });
+  res.json({ data: plan });
+});
+
+app.get('/api/remediation/plans', async (req, res) => {
+  const rows = await remediationStore.listPlans(req.query);
+  res.json({ data: rows, total: rows.length });
+});
+
+app.get('/api/remediation/plans/:id', async (req, res) => {
+  const rows = await remediationStore.listPlans(req.query);
+  const row = rows.find((item) => item.id === req.params.id);
+  if (!row) return res.status(404).json({ message: '补救练习不存在' });
+  res.json({ data: row });
+});
+
+app.patch('/api/remediation/plans/:id', async (req, res) => {
+  const row = await remediationStore.updatePlan(req.params.id, req.body || {});
+  if (!row) return res.status(404).json({ message: '补救练习不存在' });
+  res.json({ data: row });
+});
 
 app.get('/api/students/:studentId/profile', async (req, res) => {
   const records = await gradingStore.listGradingRecords({ studentId: req.params.studentId, assignmentId: req.query.assignmentId });
