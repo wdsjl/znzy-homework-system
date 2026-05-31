@@ -90,6 +90,10 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `GET /api/answer-sheets/layouts`
 - `GET /api/answer-sheets/layouts/:layoutId`
 - `POST /api/grading/uploads`
+- `POST /api/grading/jobs`
+- `GET /api/grading/jobs`
+- `GET /api/grading/jobs/:jobId`
+- `GET /api/review/queue`
 - `GET /api/grading/records`
 - `GET /api/grading/records/:uploadId`
 - `PATCH /api/grading/records/:uploadId/review`
@@ -116,6 +120,25 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `GET /api/answer-sheets/layouts` 与 `GET /api/grading/records` 支持按 `studentId`、`assignmentId`、`paperId` 查询历史布局和批改记录。
 - `PATCH /api/grading/records/:uploadId/review` 支持提交主观题人工复核分数，接口会重新计算总分、正确率、待复核数量和批改状态。
 
+## 生产级批改配置
+
+- 图像处理：服务端使用 `sharp` 按答题卡 Layout 坐标做预处理、客观题 OMR 采样和主观题区域裁剪。
+- OCR：设置 `OCR_ENABLED=1` 后启用 `tesseract.js`，可用 `OCR_LANG=chi_sim+eng` 指定语言。
+- 异步任务：`POST /api/grading/jobs` 创建批改任务，`GET /api/grading/jobs/:jobId` 轮询状态。
+- 复核工作台：`GET /api/review/queue` 查询待复核记录，`PATCH /api/grading/records/:uploadId/review` 提交主观题分数。
+- 文件存储：默认本地 `server/uploads`，也支持 S3/MinIO/OSS 兼容存储：
+
+```bash
+FILE_STORAGE_DRIVER=s3
+S3_ENDPOINT=http://127.0.0.1:9000
+S3_BUCKET=znzy-homework
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
+S3_REGION=us-east-1
+S3_FORCE_PATH_STYLE=1
+S3_PUBLIC_BASE_URL=https://cdn.example.com/znzy-homework
+```
+
 ## MySQL 存储切换
 
 默认仍使用 `server/data/questions.json`、`server/data/answer-sheet-layouts.json`、`server/data/grading-records.json`，保证本地演示可用。需要切换到 MySQL 时先执行 `database-schema.sql`，再配置：
@@ -139,7 +162,7 @@ MYSQL_DATABASE=learning_diagnosis
 
 ## 下一步建议
 
-- 图像纠偏与真实 OCR / OMR 识别
+- 更精细的透视纠偏和模型化 OMR 阈值校准
 - 主观题 AI 初判 + 人工复核
 - OSS / MinIO 文件存储替换本地上传目录
 - 志愿填报系统学生画像接口

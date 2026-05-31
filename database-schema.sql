@@ -179,6 +179,7 @@ CREATE TABLE grading_submission (
   recognized_json JSON,
   grading_json JSON,
   review_json JSON COMMENT '主观题人工复核记录',
+  processing_json JSON COMMENT '图像预处理、OMR、OCR 和主观题裁剪结果',
   score DECIMAL(8,2) NOT NULL DEFAULT 0,
   total_score DECIMAL(8,2) NOT NULL DEFAULT 0,
   objective_score DECIMAL(8,2) NOT NULL DEFAULT 0,
@@ -215,3 +216,22 @@ CREATE TABLE grading_question_result (
   CONSTRAINT fk_gqr_upload FOREIGN KEY (upload_no) REFERENCES grading_submission(upload_no) ON DELETE CASCADE
 );
 
+CREATE TABLE grading_job (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  job_no VARCHAR(64) NOT NULL UNIQUE,
+  upload_no VARCHAR(64),
+  student_no VARCHAR(64),
+  assignment_no VARCHAR(64),
+  paper_no VARCHAR(64),
+  file_name VARCHAR(255),
+  status VARCHAR(32) NOT NULL DEFAULT 'queued' COMMENT 'queued/processing/done/failed',
+  progress INT NOT NULL DEFAULT 0,
+  stage VARCHAR(64),
+  error_message TEXT,
+  result_json JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_grading_job_student (student_no),
+  INDEX idx_grading_job_assignment (assignment_no),
+  INDEX idx_grading_job_status (status)
+);

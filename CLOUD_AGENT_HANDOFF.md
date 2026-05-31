@@ -81,6 +81,10 @@ npm run dev:all
 
 已新增 `GET /api/students/:studentId/profile` 和 `GET /api/student-profile`，用于向志愿填报系统输出学业画像。画像基于批改记录聚合正确率、薄弱点、待复核风险、推荐动作和 `volunteerProfile` 摘要。
 
+## 生产级批改链路
+
+已补充文件存储抽象、S3/MinIO/OSS 兼容配置、基于 Layout 的 OMR 采样、主观题区域裁剪、可选 Tesseract OCR、异步批改任务队列和待复核队列接口。
+
 ## 下一步任务建议
 
 请优先继续实现：

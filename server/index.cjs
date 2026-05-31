@@ -15,6 +15,9 @@ const {
 const { createQuestionStore } = require('./question-store.cjs');
 const { createGradingStore } = require('./grading-store.cjs');
 const { buildStudentProfile } = require('./student-profile.cjs');
+const { createStorage } = require('./storage.cjs');
+const { recognizeAnswerSheet } = require('./image-recognition.cjs');
+const { createGradingJobQueue } = require('./grading-jobs.cjs');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -23,6 +26,9 @@ const uploadDir = path.join(__dirname, 'uploads', 'grading');
 const port = process.env.API_PORT || 4000;
 const questionStore = createQuestionStore({ dataFile });
 const gradingStore = createGradingStore({ dataDir: path.join(__dirname, 'data') });
+const fileStorage = createStorage({ localRoot: path.join(__dirname, 'uploads'), publicBasePath: '/uploads' });
+const gradingJobQueue = createGradingJobQueue({ dataDir: path.join(__dirname, 'data'), processSubmission: processGradingSubmission });
+gradingJobQueue.loadJobs();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -85,6 +91,81 @@ function normalizeQuestionForGrading(question, index) {
     answer: question.answer ?? question.ans ?? question.correctAnswer ?? '',
     score: Number(question.score || question.points || 0),
   };
+}
+
+
+async function processGradingSubmission({ file, body }, hooks = {}) {
+  const uploadId = crypto.randomUUID();
+  await hooks.onProgress?.(25, 'saving-original');
+  const ext = path.extname(file.originalname || '') || '.jpg';
+  const storedName = `${uploadId}${ext}`;
+  const savedFile = await fileStorage.saveBuffer({
+    buffer: file.buffer,
+    fileName: storedName,
+    contentType: file.mimetype || 'image/jpeg',
+    folder: 'grading/original',
+    key: `grading/original/${storedName}`,
+  });
+
+  await hooks.onProgress?.(45, 'recognizing');
+  const questions = safeJson(body.questions, []).map(normalizeQuestionForGrading);
+  const answerSheetLayout = safeJson(body.answerSheetLayout || body.layoutJson, null);
+  const providedAnswers = safeJson(body.recognizedAnswers, null);
+  const recognition = await recognizeAnswerSheet({
+    buffer: file.buffer,
+    layout: answerSheetLayout,
+    questions,
+    uploadId,
+    storage: fileStorage,
+  });
+  const omrAnswers = recognition.omr?.answers && Object.keys(recognition.omr.answers).length ? recognition.omr.answers : null;
+  const recognizedAnswers = providedAnswers || omrAnswers || mockRecognizeAnswers(questions, `${uploadId}:${sanitizeFileName(file.originalname)}`);
+
+  await hooks.onProgress?.(70, 'grading-objective');
+  const grading = gradeObjectiveAnswers(questions, recognizedAnswers);
+  const totalScore = questions.reduce((sum, question) => sum + Number(question.score || question.points || 0), 0);
+  const score = grading.objectiveScore;
+  const accuracy = grading.objectiveFullScore
+    ? Math.round((grading.objectiveScore / grading.objectiveFullScore) * 100)
+    : 0;
+  const wrong = grading.details
+    .filter((item) => item.kind === 'objective' && !item.correct)
+    .map((item) => `${item.questionNo}题`);
+  const engine = providedAnswers ? 'provided-json' : omrAnswers ? 'layout-omr' : 'mock-bubble-recognition';
+
+  const record = {
+    uploadId,
+    fileName: file.originalname,
+    imageUrl: savedFile.url,
+    storedFileName: storedName,
+    storage: savedFile,
+    studentId: body.studentId || '',
+    studentName: body.studentName || '',
+    assignmentId: body.assignmentId || '',
+    paperId: body.paperId || '',
+    answerSheetLayout,
+    recognized: {
+      engine,
+      answers: recognizedAnswers,
+      confidence: recognition.omr?.confidence || 0,
+    },
+    imageProcessing: recognition,
+    grading: {
+      ...grading,
+      score,
+      totalScore,
+      accuracy,
+      wrong,
+      manualReviewCount: grading.details.filter((item) => item.status === 'needs_manual_review').length,
+    },
+    feedback: wrong.length
+      ? `客观题已自动判分，需重点复查：${wrong.join('、')}。主观题进入人工/AI 复核队列。`
+      : '客观题全部正确，主观题进入人工/AI 复核队列。',
+    createdAt: new Date().toISOString(),
+  };
+  await hooks.onProgress?.(90, 'saving-record');
+  const saved = await gradingStore.saveGradingRecord(record);
+  return { ...record, saved: { uploadId: saved.uploadId, status: saved.status } };
 }
 
 app.get('/api/health', (_, res) => res.json({ ok: true, service: 'znzy-question-api', storage: questionStore.mode() }));
@@ -199,57 +280,25 @@ app.get('/api/answer-sheets/layouts/:layoutId', async (req, res) => {
 
 app.post('/api/grading/uploads', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: '缺少答题卡图片' });
+  const record = await processGradingSubmission({ file: req.file, body: req.body });
+  res.json({ data: record });
+});
 
-  await fs.mkdir(uploadDir, { recursive: true });
-  const uploadId = crypto.randomUUID();
-  const ext = path.extname(req.file.originalname || '') || '.jpg';
-  const storedName = `${uploadId}${ext}`;
-  const storedPath = path.join(uploadDir, storedName);
-  await fs.writeFile(storedPath, req.file.buffer);
+app.post('/api/grading/jobs', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: '缺少答题卡图片' });
+  const job = await gradingJobQueue.enqueue({ file: req.file, body: req.body });
+  res.status(202).json({ data: job });
+});
 
-  const questions = safeJson(req.body.questions, []).map(normalizeQuestionForGrading);
-  const answerSheetLayout = safeJson(req.body.answerSheetLayout || req.body.layoutJson, null);
-  const providedAnswers = safeJson(req.body.recognizedAnswers, null);
-  const recognizedAnswers = providedAnswers || mockRecognizeAnswers(questions, `${uploadId}:${sanitizeFileName(req.file.originalname)}`);
-  const grading = gradeObjectiveAnswers(questions, recognizedAnswers);
-  const totalScore = questions.reduce((sum, question) => sum + Number(question.score || question.points || 0), 0);
-  const score = grading.objectiveScore;
-  const accuracy = grading.objectiveFullScore
-    ? Math.round((grading.objectiveScore / grading.objectiveFullScore) * 100)
-    : 0;
-  const wrong = grading.details
-    .filter((item) => item.kind === 'objective' && !item.correct)
-    .map((item) => `${item.questionNo}题`);
+app.get('/api/grading/jobs', async (req, res) => {
+  const rows = await gradingJobQueue.list(req.query);
+  res.json({ data: rows, total: rows.length });
+});
 
-  const record = {
-    uploadId,
-    fileName: req.file.originalname,
-    imageUrl: `/uploads/grading/${storedName}`,
-    storedFileName: storedName,
-    studentId: req.body.studentId || '',
-    studentName: req.body.studentName || '',
-    assignmentId: req.body.assignmentId || '',
-    paperId: req.body.paperId || '',
-    answerSheetLayout,
-    recognized: {
-      engine: providedAnswers ? 'provided-json' : 'mock-bubble-recognition',
-      answers: recognizedAnswers,
-    },
-    grading: {
-      ...grading,
-      score,
-      totalScore,
-      accuracy,
-      wrong,
-      manualReviewCount: grading.details.filter((item) => item.status === 'needs_manual_review').length,
-    },
-    feedback: wrong.length
-      ? `客观题已自动判分，需重点复查：${wrong.join('、')}。主观题进入人工/AI 复核队列。`
-      : '客观题全部正确，主观题进入人工/AI 复核队列。',
-    createdAt: new Date().toISOString(),
-  };
-  const saved = await gradingStore.saveGradingRecord(record);
-  res.json({ data: { ...record, saved: { uploadId: saved.uploadId, status: saved.status } } });
+app.get('/api/grading/jobs/:jobId', async (req, res) => {
+  const job = await gradingJobQueue.get(req.params.jobId);
+  if (!job) return res.status(404).json({ message: '批改任务不存在' });
+  res.json({ data: job });
 });
 
 
@@ -272,6 +321,15 @@ app.get('/api/student-profile', async (req, res) => {
     records,
   });
   res.json({ data: profile });
+});
+
+
+app.get('/api/review/queue', async (req, res) => {
+  const rows = await gradingStore.listGradingRecords(req.query);
+  const pending = rows.filter((record) =>
+    Number(record.grading?.manualReviewCount || 0) > 0 || record.status === 'manual_review'
+  );
+  res.json({ data: pending, total: pending.length });
 });
 
 app.get('/api/grading/records', async (req, res) => {

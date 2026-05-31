@@ -148,13 +148,13 @@ function createGradingStore({ dataDir }) {
           await conn.execute(
             `INSERT INTO grading_submission
               (upload_no, paper_no, assignment_no, student_no, student_name, file_name, image_url, recognition_engine,
-               recognized_json, grading_json, review_json, score, total_score, objective_score, objective_full_score,
+               recognized_json, grading_json, review_json, processing_json, score, total_score, objective_score, objective_full_score,
                accuracy, manual_review_count, feedback, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
                paper_no = VALUES(paper_no), assignment_no = VALUES(assignment_no), student_no = VALUES(student_no),
                student_name = VALUES(student_name), file_name = VALUES(file_name), image_url = VALUES(image_url),
-               recognition_engine = VALUES(recognition_engine), recognized_json = VALUES(recognized_json), grading_json = VALUES(grading_json), review_json = VALUES(review_json),
+               recognition_engine = VALUES(recognition_engine), recognized_json = VALUES(recognized_json), grading_json = VALUES(grading_json), review_json = VALUES(review_json), processing_json = VALUES(processing_json),
                score = VALUES(score), total_score = VALUES(total_score), objective_score = VALUES(objective_score),
                objective_full_score = VALUES(objective_full_score), accuracy = VALUES(accuracy),
                manual_review_count = VALUES(manual_review_count), feedback = VALUES(feedback), status = VALUES(status), updated_at = CURRENT_TIMESTAMP`,
@@ -170,6 +170,7 @@ function createGradingStore({ dataDir }) {
               JSON.stringify(row.recognized),
               JSON.stringify(row.grading),
               JSON.stringify(row.review || null),
+              JSON.stringify(row.imageProcessing || null),
               row.grading.score,
               row.grading.totalScore,
               row.grading.objectiveScore,
@@ -302,7 +303,7 @@ function createGradingStore({ dataDir }) {
         const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const [rows] = await db.query(
           `SELECT upload_no, paper_no, assignment_no, student_no, student_name, file_name, image_url,
-                  recognition_engine, recognized_json, grading_json, review_json, feedback, status, created_at, updated_at
+                  recognition_engine, recognized_json, grading_json, review_json, processing_json, feedback, status, created_at, updated_at
            FROM grading_submission ${where} ORDER BY created_at DESC LIMIT 100`,
           values
         );
@@ -317,6 +318,7 @@ function createGradingStore({ dataDir }) {
           recognized: parseJson(row.recognized_json, { engine: row.recognition_engine || '', answers: {} }),
           grading: parseJson(row.grading_json, {}),
           review: parseJson(row.review_json, null),
+          imageProcessing: parseJson(row.processing_json, null),
           feedback: row.feedback || '',
           status: row.status || 'graded',
           createdAt: dateValue(row.created_at),
@@ -358,6 +360,8 @@ function normalizeGradingRecord(record = {}) {
     paperId: record.paperId || '',
     answerSheetLayout: record.answerSheetLayout || null,
     review: record.review || null,
+    storage: record.storage || null,
+    imageProcessing: record.imageProcessing || null,
     recognized: record.recognized || { engine: '', answers: {} },
     grading: {
       objectiveScore: Number(grading.objectiveScore || 0),
