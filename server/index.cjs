@@ -122,11 +122,12 @@ async function processGradingSubmission({ file, body }, hooks = {}) {
   const recognizedAnswers = providedAnswers || omrAnswers || mockRecognizeAnswers(questions, `${uploadId}:${sanitizeFileName(file.originalname)}`);
 
   await hooks.onProgress?.(70, 'grading-objective');
-  const grading = gradeObjectiveAnswers(questions, recognizedAnswers);
+  const autoApplyAiSubjective = body.autoApplyAiSubjective === '1' || body.autoApplyAiSubjective === 'true' || process.env.AUTO_APPLY_AI_SUBJECTIVE === '1';
+  const grading = applySubjectiveAiPrecheck(gradeObjectiveAnswers(questions, recognizedAnswers), recognition, autoApplyAiSubjective);
   const totalScore = questions.reduce((sum, question) => sum + Number(question.score || question.points || 0), 0);
-  const score = grading.objectiveScore;
-  const accuracy = grading.objectiveFullScore
-    ? Math.round((grading.objectiveScore / grading.objectiveFullScore) * 100)
+  const score = grading.objectiveScore + Number(grading.subjectiveScore || 0);
+  const accuracy = totalScore
+    ? Math.round((score / totalScore) * 100)
     : 0;
   const wrong = grading.details
     .filter((item) => item.kind === 'objective' && !item.correct)
@@ -166,6 +167,40 @@ async function processGradingSubmission({ file, body }, hooks = {}) {
   await hooks.onProgress?.(90, 'saving-record');
   const saved = await gradingStore.saveGradingRecord(record);
   return { ...record, saved: { uploadId: saved.uploadId, status: saved.status } };
+}
+
+
+function applySubjectiveAiPrecheck(grading, recognition, autoApply = false) {
+  const precheck = new Map((recognition.aiPrecheck?.results || []).map((item) => [String(item.questionNo), item]));
+  const regions = new Map((recognition.subjectiveRegions || []).map((item) => [String(item.questionNo), item]));
+  const details = (grading.details || []).map((detail) => {
+    if (detail.kind !== 'subjective') return detail;
+    const key = String(detail.questionNo);
+    const ai = precheck.get(key);
+    const region = regions.get(key);
+    if (!ai) return detail;
+    const fullScore = Number(detail.fullScore || 0);
+    const aiSuggestedScore = Math.round(fullScore * Number(ai.suggestedScoreRate || 0));
+    return {
+      ...detail,
+      aiStatus: ai.status,
+      aiSuggestedScore,
+      aiSuggestedScoreRate: ai.suggestedScoreRate,
+      aiReason: ai.reason,
+      ocrText: ai.ocrText || '',
+      subjectiveImageUrl: region?.imageUrl || '',
+      score: autoApply ? aiSuggestedScore : Number(detail.score || 0),
+      status: autoApply ? 'ai_reviewed' : detail.status,
+    };
+  });
+  const subjectiveScore = details
+    .filter((item) => item.kind === 'subjective')
+    .reduce((sum, item) => sum + Number(item.score || 0), 0);
+  return {
+    ...grading,
+    details,
+    subjectiveScore,
+  };
 }
 
 app.get('/api/health', (_, res) => res.json({ ok: true, service: 'znzy-question-api', storage: questionStore.mode() }));
@@ -337,6 +372,24 @@ app.get('/api/grading/records', async (req, res) => {
   res.json({ data: rows, total: rows.length });
 });
 
+
+
+app.post('/api/grading/records/:uploadId/ai-review', async (req, res) => {
+  const rows = await gradingStore.listGradingRecords({ uploadId: req.params.uploadId });
+  const row = rows.find((item) => item.uploadId === req.params.uploadId);
+  if (!row) return res.status(404).json({ message: '批改记录不存在' });
+  const subjectiveScores = Object.fromEntries((row.grading?.details || [])
+    .filter((detail) => detail.kind === 'subjective' && detail.aiSuggestedScore !== undefined)
+    .map((detail) => [String(detail.questionNo), Number(detail.aiSuggestedScore || 0)]));
+  if (!Object.keys(subjectiveScores).length) return res.status(400).json({ message: '没有可应用的 AI 初判分数' });
+  const reviewed = await gradingStore.reviewGradingRecord(req.params.uploadId, {
+    reviewer: req.body?.reviewer || 'ai-precheck',
+    subjectiveScores,
+    feedback: req.body?.feedback || '已应用 AI/规则主观题初判分数，建议教师抽查。',
+    status: req.body?.status,
+  });
+  res.json({ data: reviewed });
+});
 
 app.patch('/api/grading/records/:uploadId/review', async (req, res) => {
   const row = await gradingStore.reviewGradingRecord(req.params.uploadId, req.body || {});

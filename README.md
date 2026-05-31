@@ -97,6 +97,7 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `GET /api/grading/records`
 - `GET /api/grading/records/:uploadId`
 - `PATCH /api/grading/records/:uploadId/review`
+- `POST /api/grading/records/:uploadId/ai-review`
 - `GET /api/knowledge-points`
 - `GET /api/students/:studentId/profile`
 - `GET /api/student-profile`
@@ -124,8 +125,9 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 
 - 图像处理：服务端使用 `sharp` 按答题卡 Layout 坐标做预处理、客观题 OMR 采样和主观题区域裁剪。
 - OCR：设置 `OCR_ENABLED=1` 后启用 `tesseract.js`，可用 `OCR_LANG=chi_sim+eng` 指定语言。
+- 主观题 AI/规则初判：默认根据裁剪区域和 OCR 文本生成建议分；可用 `DEFAULT_AI_SUBJECTIVE_RATE=0.75` 调整无 OCR 时的默认建议比例，`AUTO_APPLY_AI_SUBJECTIVE=1` 可在上传批改时自动应用建议分。
 - 异步任务：`POST /api/grading/jobs` 创建批改任务，`GET /api/grading/jobs/:jobId` 轮询状态。
-- 复核工作台：`GET /api/review/queue` 查询待复核记录，`PATCH /api/grading/records/:uploadId/review` 提交主观题分数。
+- 复核工作台：`GET /api/review/queue` 查询待复核记录，`PATCH /api/grading/records/:uploadId/review` 提交主观题分数，`POST /api/grading/records/:uploadId/ai-review` 一键应用 AI/规则初判建议。
 - 文件存储：默认本地 `server/uploads`，也支持 S3/MinIO/OSS 兼容存储：
 
 ```bash

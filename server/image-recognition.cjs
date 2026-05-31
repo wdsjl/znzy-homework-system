@@ -168,11 +168,13 @@ function buildSubjectivePrecheck({ questions, subjectiveRegions, ocr }) {
     const text = (ocr.results || []).find((item) => item.questionNo === region.questionNo)?.text || '';
     const answer = String(question?.answer || question?.ans || '');
     const similarity = text && answer ? simpleSimilarity(text, answer) : 0;
+    const fallbackRate = Number(process.env.DEFAULT_AI_SUBJECTIVE_RATE || 0.75);
+    const suggestedScoreRate = text ? Math.max(0.4, Math.min(0.95, similarity)) : Math.max(0, Math.min(1, fallbackRate));
     return {
       questionNo: region.questionNo,
-      status: text ? 'ai_prechecked' : 'needs_manual_review',
-      suggestedScoreRate: text ? Math.max(0.4, Math.min(0.95, similarity)) : null,
-      reason: text ? '基于 OCR 文本与参考答案的相似度给出初判，仍建议教师复核。' : '未启用 OCR 或未识别到主观题文本。',
+      status: text ? 'ai_prechecked' : 'rule_prechecked',
+      suggestedScoreRate,
+      reason: text ? '基于 OCR 文本与参考答案的相似度给出初判，仍建议教师复核。' : '未启用 OCR 或未识别到文本，按默认规则评分率给出初判建议。',
       ocrText: text,
     };
   });
