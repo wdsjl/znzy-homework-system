@@ -16,7 +16,7 @@ const { createQuestionStore } = require('./question-store.cjs');
 const { createGradingStore } = require('./grading-store.cjs');
 const { buildStudentProfile } = require('./student-profile.cjs');
 const { createStorage } = require('./storage.cjs');
-const { recognizeAnswerSheet } = require('./image-recognition.cjs');
+const { decodeQrPayload, recognizeAnswerSheet } = require('./image-recognition.cjs');
 const { createGradingJobQueue } = require('./grading-jobs.cjs');
 
 const app = express();
@@ -107,10 +107,20 @@ async function processGradingSubmission({ file, body }, hooks = {}) {
     key: `grading/original/${storedName}`,
   });
 
-  await hooks.onProgress?.(45, 'recognizing');
+  await hooks.onProgress?.(40, 'decoding-qr');
+  const qr = await decodeQrPayload(file.buffer);
+  const qrPayload = qr.payload || {};
   const questions = safeJson(body.questions, []).map(normalizeQuestionForGrading);
-  const answerSheetLayout = safeJson(body.answerSheetLayout || body.layoutJson, null);
+  let answerSheetLayout = safeJson(body.answerSheetLayout || body.layoutJson, null);
+  const boundPaperId = body.paperId || qrPayload.paperId || '';
+  const boundStudentId = body.studentId || qrPayload.studentId || '';
+  const boundAssignmentId = body.assignmentId || qrPayload.assignmentId || '';
+  if (!answerSheetLayout && (boundPaperId || boundStudentId || boundAssignmentId)) {
+    const layouts = await gradingStore.listLayouts({ paperId: boundPaperId, studentId: boundStudentId, assignmentId: boundAssignmentId });
+    answerSheetLayout = layouts[0]?.layout || null;
+  }
   const providedAnswers = safeJson(body.recognizedAnswers, null);
+  await hooks.onProgress?.(45, 'recognizing');
   const recognition = await recognizeAnswerSheet({
     buffer: file.buffer,
     layout: answerSheetLayout,
@@ -118,6 +128,7 @@ async function processGradingSubmission({ file, body }, hooks = {}) {
     uploadId,
     storage: fileStorage,
   });
+  recognition.qr = recognition.qr?.status === 'decoded' ? recognition.qr : qr;
   const omrAnswers = recognition.omr?.answers && Object.keys(recognition.omr.answers).length ? recognition.omr.answers : null;
   const recognizedAnswers = providedAnswers || omrAnswers || mockRecognizeAnswers(questions, `${uploadId}:${sanitizeFileName(file.originalname)}`);
 
@@ -140,10 +151,10 @@ async function processGradingSubmission({ file, body }, hooks = {}) {
     imageUrl: savedFile.url,
     storedFileName: storedName,
     storage: savedFile,
-    studentId: body.studentId || '',
+    studentId: boundStudentId,
     studentName: body.studentName || '',
-    assignmentId: body.assignmentId || '',
-    paperId: body.paperId || '',
+    assignmentId: boundAssignmentId,
+    paperId: boundPaperId,
     answerSheetLayout,
     recognized: {
       engine,
@@ -151,6 +162,7 @@ async function processGradingSubmission({ file, body }, hooks = {}) {
       confidence: recognition.omr?.confidence || 0,
     },
     imageProcessing: recognition,
+    binding: { source: qrPayload.paperId || qrPayload.studentId || qrPayload.assignmentId ? 'qr' : 'request', qrPayload, layoutMatched: Boolean(answerSheetLayout) },
     grading: {
       ...grading,
       score,
@@ -286,6 +298,21 @@ app.post('/api/papers/generate', async (req, res) => {
       questions,
     },
   });
+});
+
+
+app.post('/api/answer-sheets/decode-qr', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: '缺少答题卡图片' });
+  const qr = await decodeQrPayload(req.file.buffer);
+  let layouts = [];
+  if (qr.payload) {
+    layouts = await gradingStore.listLayouts({
+      paperId: qr.payload.paperId || '',
+      studentId: qr.payload.studentId || '',
+      assignmentId: qr.payload.assignmentId || '',
+    });
+  }
+  res.json({ data: { qr, matchedLayout: layouts[0] || null } });
 });
 
 app.post('/api/answer-sheets/qrcode', async (req, res) => {

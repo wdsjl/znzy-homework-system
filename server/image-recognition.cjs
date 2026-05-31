@@ -1,7 +1,9 @@
 const sharp = require('sharp');
+const jsQR = require('jsqr');
 
 async function recognizeAnswerSheet({ buffer, layout, questions = [], uploadId, storage }) {
   const imageInfo = await inspectImage(buffer);
+  const qr = await decodeQrPayload(buffer);
   const correction = await estimateCorrection(buffer);
   const omr = await recognizeObjectiveAnswers(buffer, layout);
   const subjectiveRegions = await cropSubjectiveRegions({ buffer, layout, uploadId, storage });
@@ -10,12 +12,40 @@ async function recognizeAnswerSheet({ buffer, layout, questions = [], uploadId, 
 
   return {
     imageInfo,
+    qr,
     correction,
     omr,
     subjectiveRegions,
     ocr,
     aiPrecheck,
   };
+}
+
+
+async function decodeQrPayload(buffer) {
+  try {
+    const maxWidth = Number(process.env.QR_DECODE_WIDTH || 1400);
+    const image = sharp(buffer)
+      .resize({ width: maxWidth, withoutEnlargement: true })
+      .ensureAlpha();
+    const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
+    const decoded = jsQR(new Uint8ClampedArray(data), info.width, info.height);
+    if (!decoded?.data) return { status: 'not_found', payload: null, raw: '', location: null };
+    let payload = null;
+    try {
+      payload = JSON.parse(decoded.data);
+    } catch {
+      payload = { raw: decoded.data };
+    }
+    return {
+      status: 'decoded',
+      payload,
+      raw: decoded.data,
+      location: decoded.location || null,
+    };
+  } catch (error) {
+    return { status: 'failed', payload: null, raw: '', error: error.message };
+  }
 }
 
 async function inspectImage(buffer) {
@@ -215,4 +245,4 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-module.exports = { recognizeAnswerSheet, recognizeObjectiveAnswers };
+module.exports = { decodeQrPayload, recognizeAnswerSheet, recognizeObjectiveAnswers };

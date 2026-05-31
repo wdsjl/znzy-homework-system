@@ -83,7 +83,7 @@ npm run dev:all
 
 ## 生产级批改链路
 
-已补充文件存储抽象、S3/MinIO/OSS 兼容配置、基于 Layout 的 OMR 采样、主观题区域裁剪、可选 Tesseract OCR、异步批改任务队列和待复核队列接口。新增 `POST /api/grading/records/:uploadId/ai-review`，可应用主观题 AI/规则初判建议分。
+已补充文件存储抽象、S3/MinIO/OSS 兼容配置、基于 Layout 的 OMR 采样、主观题区域裁剪、可选 Tesseract OCR、异步批改任务队列和待复核队列接口。新增 `POST /api/grading/records/:uploadId/ai-review`，可应用主观题 AI/规则初判建议分。已新增二维码解码绑定能力，上传答题卡可自动解析 paperId/studentId/assignmentId 并匹配 Layout。
 
 ## 下一步任务建议
 

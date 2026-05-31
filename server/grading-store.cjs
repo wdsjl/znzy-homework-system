@@ -362,6 +362,7 @@ function normalizeGradingRecord(record = {}) {
     review: record.review || null,
     storage: record.storage || null,
     imageProcessing: record.imageProcessing || null,
+    binding: record.binding || null,
     recognized: record.recognized || { engine: '', answers: {} },
     grading: {
       objectiveScore: Number(grading.objectiveScore || 0),

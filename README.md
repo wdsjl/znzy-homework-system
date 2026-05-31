@@ -85,6 +85,7 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `POST /api/question-import/paste`
 - `POST /api/question-import/docx`
 - `POST /api/papers/generate`
+- `POST /api/answer-sheets/decode-qr`
 - `POST /api/answer-sheets/qrcode`
 - `POST /api/answer-sheets/layout`
 - `GET /api/answer-sheets/layouts`
@@ -116,6 +117,7 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 ## 答题卡与批改
 
 - `POST /api/answer-sheets/layout`：入参包含 `paperId`、`studentId`、`assignmentId`、`templateVersion`、`questions`，返回二维码 DataURL 与 Layout JSON，并保存布局记录。
+- `POST /api/answer-sheets/decode-qr`：上传答题卡图片，解析二维码内容并尝试匹配已保存 Layout。
 - Layout JSON 使用毫米坐标，包含页面尺寸、四角定位点、二维码区域、学生信息区、每题答题区域；客观题包含选项圆心坐标，主观题包含答题框坐标。
 - `POST /api/grading/uploads`：使用 multipart/form-data 上传 `file`，可附带 `questions`、`answerSheetLayout`、`studentId`、`studentName`、`assignmentId`、`paperId`；接口保存原图到 `server/uploads/grading`，返回并保存模拟填涂识别、客观题判分、错题列表与主观题待复核数量。
 - `GET /api/answer-sheets/layouts` 与 `GET /api/grading/records` 支持按 `studentId`、`assignmentId`、`paperId` 查询历史布局和批改记录。
@@ -123,7 +125,7 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 
 ## 生产级批改配置
 
-- 图像处理：服务端使用 `sharp` 按答题卡 Layout 坐标做预处理、客观题 OMR 采样和主观题区域裁剪。
+- 图像处理：服务端使用 `sharp` 按答题卡 Layout 坐标做预处理、客观题 OMR 采样、主观题区域裁剪和二维码解码绑定。
 - OCR：设置 `OCR_ENABLED=1` 后启用 `tesseract.js`，可用 `OCR_LANG=chi_sim+eng` 指定语言。
 - 主观题 AI/规则初判：默认根据裁剪区域和 OCR 文本生成建议分；可用 `DEFAULT_AI_SUBJECTIVE_RATE=0.75` 调整无 OCR 时的默认建议比例，`AUTO_APPLY_AI_SUBJECTIVE=1` 可在上传批改时自动应用建议分。
 - 异步任务：`POST /api/grading/jobs` 创建批改任务，`GET /api/grading/jobs/:jobId` 轮询状态。
