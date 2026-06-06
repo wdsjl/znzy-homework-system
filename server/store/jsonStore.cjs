@@ -91,6 +91,20 @@ function createJsonStore() {
         (!paperId || g.paperId === paperId)
       );
     },
+
+    async getGrading(id) {
+      const gradings = await readJson(gradingsFile, []);
+      return gradings.find((g) => g.id === id) || null;
+    },
+
+    async updateGrading(id, patch) {
+      const gradings = await readJson(gradingsFile, []);
+      const idx = gradings.findIndex((g) => g.id === id);
+      if (idx === -1) return null;
+      gradings[idx] = { ...gradings[idx], ...patch, id };
+      await writeJson(gradingsFile, gradings);
+      return gradings[idx];
+    },
   };
 }
 

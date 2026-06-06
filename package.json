@@ -5,7 +5,9 @@
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "db:seed": "node server/scripts/seed-db.cjs"
+    "db:seed": "node server/scripts/seed-db.cjs",
+    "db:up": "docker compose up -d mysql",
+    "db:down": "docker compose down"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -23,7 +25,8 @@
     "qrcode": "latest",
     "mysql2": "latest",
     "sharp": "latest",
-    "tesseract.js": "latest"
+    "tesseract.js": "latest",
+    "perspective-transform": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

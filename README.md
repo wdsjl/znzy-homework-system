@@ -77,8 +77,10 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 
 ```bash
 cp .env.example .env
-# 编辑 DATABASE_URL 或 MYSQL_* 变量
-npm run db:seed   # 首次将 questions.json 导入 MySQL
+npm run db:up          # Docker 启动 MySQL
+# DATABASE_URL=mysql://znzy:znzy@127.0.0.1:3306/znzy_homework
+npm run db:seed        # 首次导入 questions.json
+npm run dev:all
 ```
 
 运行时表结构见 `server/sql/init-runtime.sql`（与 `database-schema.sql` 正式版可并行演进）。
@@ -98,6 +100,8 @@ npm run db:seed   # 首次将 questions.json 导入 MySQL
 - `GET /api/papers/:id/qr`
 - `POST /api/grading/upload`
 - `GET /api/grading`
+- `GET /api/grading/:id`
+- `POST /api/grading/:id/review`
 - `GET /api/knowledge-points`
 
 ## 嵌入方式

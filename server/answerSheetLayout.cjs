@@ -24,10 +24,10 @@ function buildAnswerSheetLayout({ paperId, questions = [] }) {
   const regions = [];
 
   const markers = [
-    { id: 'tl', x: PAGE.marginMm, y: PAGE.marginMm, widthMm: 8, heightMm: 8 },
-    { id: 'tr', x: PAGE.widthMm - PAGE.marginMm - 8, y: PAGE.marginMm, widthMm: 8, heightMm: 8 },
-    { id: 'bl', x: PAGE.marginMm, y: PAGE.heightMm - PAGE.marginMm - 8, widthMm: 8, heightMm: 8 },
-    { id: 'br', x: PAGE.widthMm - PAGE.marginMm - 8, y: PAGE.heightMm - PAGE.marginMm - 8, widthMm: 8, heightMm: 8 },
+    { id: 'tl', x: PAGE.marginMm, y: PAGE.marginMm, widthMm: 8, heightMm: 8, anchorMm: { x: 20, y: 20 } },
+    { id: 'tr', x: PAGE.widthMm - PAGE.marginMm - 8, y: PAGE.marginMm, widthMm: 8, heightMm: 8, anchorMm: { x: 190, y: 20 } },
+    { id: 'bl', x: PAGE.marginMm, y: PAGE.heightMm - PAGE.marginMm - 8, widthMm: 8, heightMm: 8, anchorMm: { x: 20, y: 277 } },
+    { id: 'br', x: PAGE.widthMm - PAGE.marginMm - 8, y: PAGE.heightMm - PAGE.marginMm - 8, widthMm: 8, heightMm: 8, anchorMm: { x: 190, y: 277 } },
   ];
 
   const qrCode = {

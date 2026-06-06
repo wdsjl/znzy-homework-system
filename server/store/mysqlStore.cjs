@@ -75,6 +75,11 @@ function rowToGrading(row) {
     details: row.details_json ? (typeof row.details_json === 'string' ? JSON.parse(row.details_json) : row.details_json) : [],
     wrongPoints: row.wrong_points_json ? (typeof row.wrong_points_json === 'string' ? JSON.parse(row.wrong_points_json) : row.wrong_points_json) : [],
     feedback: row.feedback,
+    reviewStatus: row.review_status,
+    needsReview: row.needs_review,
+    review: row.review_json ? (typeof row.review_json === 'string' ? JSON.parse(row.review_json) : row.review_json) : null,
+    markerDetection: row.marker_detection_json ? (typeof row.marker_detection_json === 'string' ? JSON.parse(row.marker_detection_json) : row.marker_detection_json) : null,
+    preprocessing: row.preprocessing_json ? (typeof row.preprocessing_json === 'string' ? JSON.parse(row.preprocessing_json) : row.preprocessing_json) : [],
     gradedAt: row.graded_at,
   };
 }
@@ -89,6 +94,16 @@ function createMysqlStore(pool) {
       const sql = await fs.readFile(sqlPath, 'utf-8');
       for (const stmt of sql.split(';').map((s) => s.trim()).filter(Boolean)) {
         await pool.query(stmt);
+      }
+      const alters = [
+        "ALTER TABLE znzy_grading ADD COLUMN review_status VARCHAR(32) NOT NULL DEFAULT 'pending'",
+        'ALTER TABLE znzy_grading ADD COLUMN review_json JSON',
+        'ALTER TABLE znzy_grading ADD COLUMN needs_review INT NOT NULL DEFAULT 0',
+        'ALTER TABLE znzy_grading ADD COLUMN preprocessing_json JSON',
+        'ALTER TABLE znzy_grading ADD COLUMN marker_detection_json JSON',
+      ];
+      for (const stmt of alters) {
+        try { await pool.query(stmt); } catch { /* column may already exist */ }
       }
     },
 
@@ -151,11 +166,27 @@ function createMysqlStore(pool) {
 
     async saveGrading(grading) {
       await pool.query(
-        `INSERT INTO znzy_grading (id, paper_id, student_id, assignment_id, image_path, image_name, corrected_image_path, mode, accuracy, earned_score, total_score, details_json, wrong_points_json, feedback)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [grading.id, grading.paperId, grading.studentId || null, grading.assignmentId || null, grading.imagePath, grading.imageName || null, grading.correctedImagePath || null, grading.mode, grading.accuracy, grading.earnedScore, grading.totalScore, JSON.stringify(grading.details || []), JSON.stringify(grading.wrongPoints || []), grading.feedback || '']
+        `INSERT INTO znzy_grading (id, paper_id, student_id, assignment_id, image_path, image_name, corrected_image_path, mode, accuracy, earned_score, total_score, details_json, wrong_points_json, feedback, review_status, review_json, needs_review, preprocessing_json, marker_detection_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [grading.id, grading.paperId, grading.studentId || null, grading.assignmentId || null, grading.imagePath, grading.imageName || null, grading.correctedImagePath || null, grading.mode, grading.accuracy, grading.earnedScore, grading.totalScore, JSON.stringify(grading.details || []), JSON.stringify(grading.wrongPoints || []), grading.feedback || '', grading.reviewStatus || 'pending', JSON.stringify(grading.review || null), grading.needsReview || 0, JSON.stringify(grading.preprocessing || []), JSON.stringify(grading.markerDetection || null)]
       );
       return grading;
+    },
+
+    async getGrading(id) {
+      const rows = await pool.query('SELECT * FROM znzy_grading WHERE id = ? LIMIT 1', [id]);
+      return rows[0][0] ? rowToGrading(rows[0][0]) : null;
+    },
+
+    async updateGrading(id, patch) {
+      const current = await this.getGrading(id);
+      if (!current) return null;
+      const merged = { ...current, ...patch, id };
+      await pool.query(
+        `UPDATE znzy_grading SET earned_score=?, total_score=?, accuracy=?, details_json=?, wrong_points_json=?, feedback=?, review_status=?, review_json=?, needs_review=?, mode=? WHERE id=?`,
+        [merged.earnedScore, merged.totalScore, merged.accuracy, JSON.stringify(merged.details || []), JSON.stringify(merged.wrongPoints || []), merged.feedback || '', merged.reviewStatus || 'reviewed', JSON.stringify(merged.review || null), merged.needsReview || 0, merged.mode, id]
+      );
+      return merged;
     },
 
     async listGradings(query = {}) {

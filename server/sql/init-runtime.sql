@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS znzy_grading (
   details_json JSON,
   wrong_points_json JSON,
   feedback TEXT,
+  review_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+  review_json JSON,
+  needs_review INT NOT NULL DEFAULT 0,
+  preprocessing_json JSON,
+  marker_detection_json JSON,
   graded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_zg_paper (paper_id),
   INDEX idx_zg_student (student_id)

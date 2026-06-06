@@ -3,6 +3,7 @@ const path = require('path');
 const { prepareAnswerSheetImage } = require('./ocr/imagePrep.cjs');
 const { detectChoiceAnswer } = require('./ocr/bubbleDetect.cjs');
 const { recognizeTextRegion } = require('./ocr/textOcr.cjs');
+const { scoreSubjectiveAnswer } = require('./ocr/subjectiveScore.cjs');
 
 function normalizeAnswer(answer) {
   return String(answer || '')
@@ -19,7 +20,7 @@ function isObjective(type) {
   return type.includes('选') || type.includes('判断');
 }
 
-function scoreQuestion(question, detectedAnswer) {
+function scoreObjective(question, detectedAnswer) {
   const expected = normalizeAnswer(question.answer);
   const actual = normalizeAnswer(detectedAnswer);
   const full = Number(question.score || 0);
@@ -36,9 +37,21 @@ function mockDetectedChoice(correct, options) {
   return pool[Math.floor(Math.random() * pool.length)] || correct;
 }
 
-function buildGradingResult({ paper, studentId, imagePath, imageName, correctedImagePath, mode = 'mock-ocr', details, earnedScore, totalScore }) {
-  const wrong = details.filter((d) => !d.correct).map((d) => `${d.type}第${d.questionNo}题`);
+function summarizeReview(details) {
+  const needsReview = details.filter((d) => d.reviewSuggested).length;
+  const reviewStatus = needsReview > 0 ? 'pending' : 'auto-approved';
+  return { needsReview, reviewStatus };
+}
+
+function buildGradingResult({
+  paper, studentId, imagePath, imageName, correctedImagePath, mode = 'mock-ocr',
+  details, earnedScore, totalScore, markerDetection, preprocessing,
+}) {
+  const wrong = details.filter((d) => !d.correct && !d.reviewSuggested).map((d) => `${d.type}第${d.questionNo}题`);
+  const reviewPending = details.filter((d) => d.reviewSuggested).map((d) => `${d.type}第${d.questionNo}题`);
   const accuracy = totalScore ? Math.round((earnedScore / totalScore) * 100) : 0;
+  const { needsReview, reviewStatus } = summarizeReview(details);
+
   return {
     id: crypto.randomUUID(),
     paperId: paper.id,
@@ -52,8 +65,15 @@ function buildGradingResult({ paper, studentId, imagePath, imageName, correctedI
     earnedScore,
     totalScore,
     details,
-    wrongPoints: wrong.slice(0, 4),
-    feedback: accuracy >= 85 ? '整体掌握较好，建议增加挑战题。' : '建议推送同知识点分层巩固题。',
+    wrongPoints: [...wrong, ...reviewPending].slice(0, 6),
+    feedback: needsReview > 0
+      ? `AI 初判完成，${needsReview} 题建议人工复核。`
+      : accuracy >= 85 ? '整体掌握较好，建议增加挑战题。' : '建议推送同知识点分层巩固题。',
+    reviewStatus,
+    needsReview,
+    review: { status: reviewStatus, reviewerId: null, reviewedAt: null, notes: '' },
+    markerDetection: markerDetection || null,
+    preprocessing: preprocessing || [],
     gradedAt: new Date().toISOString(),
   };
 }
@@ -75,7 +95,9 @@ function buildMockDetails(paper) {
       detectedAnswer = Math.random() > 0.35 ? String(q.answer || '').slice(0, 24) : '识别不清';
       ocrConfidence = 0.62 + Math.random() * 0.25;
     }
-    const scored = scoreQuestion(q, detectedAnswer);
+    const scored = isObjective(q.type)
+      ? scoreObjective(q, detectedAnswer)
+      : scoreSubjectiveAnswer({ expected: q.answer, detected: detectedAnswer, fullScore: q.score, questionType: q.type });
     earned += scored.score;
     details.push({
       questionNo: sortNo,
@@ -88,6 +110,9 @@ function buildMockDetails(paper) {
       fullScore: Number(q.score || 0),
       ocrConfidence: Number(ocrConfidence.toFixed(2)),
       fillRegionMatched: isObjective(q.type),
+      reviewSuggested: scored.reviewSuggested || false,
+      aiVerdict: scored.aiVerdict || null,
+      similarity: scored.similarity ?? null,
     });
   }
   return { details, earned, total };
@@ -98,21 +123,15 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
   let prep;
   try {
     prep = await prepareAnswerSheetImage(absoluteImagePath, uploadsDir);
-  } catch (err) {
+  } catch {
     const mock = buildMockDetails(paper);
     return buildGradingResult({
-      paper,
-      studentId,
-      imagePath,
-      imageName,
-      mode: 'mock-ocr',
-      details: mock.details,
-      earnedScore: mock.earned,
-      totalScore: mock.total,
+      paper, studentId, imagePath, imageName, mode: 'mock-ocr',
+      details: mock.details, earnedScore: mock.earned, totalScore: mock.total,
     });
   }
 
-  const pageSize = layout?.pageSize || { widthMm: 210, heightMm: 297 };
+  const pageSize = layout?.pageSize || prep.pageSize || { widthMm: 210, heightMm: 297 };
   const imageSize = { width: prep.width, height: prep.height };
   const regionMap = new Map((layout?.regions || []).map((r) => [r.questionNo, r]));
   const details = [];
@@ -126,31 +145,46 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
     let detectedAnswer = '';
     let ocrConfidence = 0;
     let fillRegionMatched = false;
+    let scored;
 
     if (region?.choiceRegions?.length) {
       const detected = await detectChoiceAnswer(prep.correctedPath, region.choiceRegions, imageSize, pageSize);
       detectedAnswer = detected.answer;
       ocrConfidence = detected.confidence;
       fillRegionMatched = Boolean(detected.answer);
-    } else if (region?.answerBox) {
+      scored = scoreObjective(q, detectedAnswer);
+    } else if (region?.answerBox || !isObjective(q.type)) {
       try {
-        const textResult = await recognizeTextRegion(prep.correctedPath, region.answerBox, imageSize, pageSize);
+        const box = region?.answerBox || {
+          x: pageSize.marginMm || 12,
+          y: 60 + sortNo * 20,
+          widthMm: pageSize.widthMm - 24,
+          heightMm: 18,
+        };
+        const textResult = await recognizeTextRegion(prep.correctedPath, box, imageSize, pageSize);
         detectedAnswer = textResult.text || '识别不清';
         ocrConfidence = textResult.confidence;
       } catch {
         detectedAnswer = '识别不清';
         ocrConfidence = 0.2;
       }
+      scored = scoreSubjectiveAnswer({
+        expected: q.answer,
+        detected: detectedAnswer,
+        fullScore: q.score,
+        questionType: q.type,
+      });
     } else if (isObjective(q.type)) {
       const options = q.type.includes('判断') ? ['√', '×'] : ['A', 'B', 'C', 'D'];
       detectedAnswer = mockDetectedChoice(String(q.answer || '').trim(), options);
       ocrConfidence = 0.5;
+      scored = scoreObjective(q, detectedAnswer);
     } else {
       detectedAnswer = '识别不清';
       ocrConfidence = 0.2;
+      scored = scoreSubjectiveAnswer({ expected: q.answer, detected: detectedAnswer, fullScore: q.score, questionType: q.type });
     }
 
-    const scored = scoreQuestion(q, detectedAnswer);
     earned += scored.score;
     details.push({
       questionNo: sortNo,
@@ -163,6 +197,11 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
       fullScore: Number(q.score || 0),
       ocrConfidence: Number(ocrConfidence.toFixed(2)),
       fillRegionMatched,
+      reviewSuggested: scored.reviewSuggested || false,
+      aiVerdict: scored.aiVerdict || null,
+      similarity: scored.similarity ?? null,
+      manualScore: null,
+      reviewComment: '',
     });
   }
 
@@ -172,16 +211,52 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
     imagePath,
     imageName,
     correctedImagePath: prep.correctedRelativePath,
-    mode: 'ocr',
+    mode: prep.canonical ? 'ocr-perspective' : 'ocr',
     details,
     earnedScore: earned,
     totalScore: total,
+    markerDetection: prep.markerDetection,
+    preprocessing: prep.preprocessing,
   });
+}
+
+function applyManualReview(grading, { reviewerId, notes, adjustments = [] }) {
+  const detailMap = new Map(grading.details.map((d) => [d.questionNo, { ...d }]));
+  let earned = 0;
+  for (const adj of adjustments) {
+    const row = detailMap.get(adj.questionNo);
+    if (!row) continue;
+    row.manualScore = Number(adj.score);
+    row.reviewComment = adj.comment || '';
+    row.reviewSuggested = false;
+    row.correct = row.manualScore >= row.fullScore;
+    row.score = row.manualScore;
+    row.aiVerdict = adj.comment || '教师人工复核调整';
+  }
+  const details = [...detailMap.values()].sort((a, b) => a.questionNo - b.questionNo);
+  for (const d of details) earned += Number(d.score || 0);
+  const accuracy = grading.totalScore ? Math.round((earned / grading.totalScore) * 100) : 0;
+  return {
+    ...grading,
+    details,
+    earnedScore: earned,
+    accuracy,
+    reviewStatus: 'reviewed',
+    needsReview: 0,
+    review: {
+      status: 'reviewed',
+      reviewerId: reviewerId || 'teacher',
+      reviewedAt: new Date().toISOString(),
+      notes: notes || '',
+    },
+    feedback: '已完成人工复核并更新得分。',
+  };
 }
 
 module.exports = {
   buildGradingResult,
   buildGradingResultFromImage,
+  applyManualReview,
   normalizeAnswer,
   isObjective,
 };

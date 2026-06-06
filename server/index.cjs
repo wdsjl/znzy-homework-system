@@ -6,7 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { buildAnswerSheetLayout, TEMPLATE_VERSION } = require('./answerSheetLayout.cjs');
-const { buildGradingResultFromImage } = require('./grading.cjs');
+const { buildGradingResultFromImage, applyManualReview } = require('./grading.cjs');
 const { getStore } = require('./store/index.cjs');
 
 const app = express();
@@ -81,7 +81,14 @@ async function buildQrPayload({ paperId, studentId, assignmentId }) {
 }
 
 app.get('/api/health', async (_, res) => {
-  res.json({ ok: true, service: 'znzy-question-api', templateVersion: TEMPLATE_VERSION, storage: storageMode, ocr: 'tesseract+bubble-detect' });
+  res.json({
+    ok: true,
+    service: 'znzy-question-api',
+    templateVersion: TEMPLATE_VERSION,
+    storage: storageMode,
+    ocr: 'perspective-warp+tesseract+bubble-detect',
+    features: ['marker-perspective', 'subjective-ai-fuzzy', 'manual-review'],
+  });
 });
 
 app.get('/api/questions', async (req, res) => {
@@ -238,6 +245,22 @@ app.get('/api/grading', async (req, res) => {
   const store = await getStore();
   const filtered = await store.listGradings(req.query);
   res.json({ data: filtered, total: filtered.length, storage: store.mode });
+});
+
+app.get('/api/grading/:id', async (req, res) => {
+  const store = await getStore();
+  const grading = await store.getGrading(req.params.id);
+  if (!grading) return res.status(404).json({ message: '批改记录不存在' });
+  res.json({ data: grading, storage: store.mode });
+});
+
+app.post('/api/grading/:id/review', async (req, res) => {
+  const store = await getStore();
+  const grading = await store.getGrading(req.params.id);
+  if (!grading) return res.status(404).json({ message: '批改记录不存在' });
+  const reviewed = applyManualReview(grading, req.body || {});
+  await store.updateGrading(req.params.id, reviewed);
+  res.json({ data: reviewed, storage: store.mode });
 });
 
 async function start() {

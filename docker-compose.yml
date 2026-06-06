@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: znzy-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: znzy
+      MYSQL_DATABASE: znzy_homework
+      MYSQL_USER: znzy
+      MYSQL_PASSWORD: znzy
+    volumes:
+      - znzy_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pznzy"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  znzy_mysql_data:
