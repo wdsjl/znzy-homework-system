@@ -2,12 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
-const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { buildAnswerSheetLayout, TEMPLATE_VERSION } = require('./answerSheetLayout.cjs');
-const { buildGradingResult } = require('./grading.cjs');
+const { buildGradingResultFromImage } = require('./grading.cjs');
+const { getStore } = require('./store/index.cjs');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -15,6 +15,7 @@ const gradingUpload = multer({
   storage: multer.diskStorage({
     destination: async (_, __, cb) => {
       const dir = path.join(__dirname, 'uploads');
+      const fs = require('fs/promises');
       await fs.mkdir(dir, { recursive: true });
       cb(null, dir);
     },
@@ -24,52 +25,12 @@ const gradingUpload = multer({
   }),
   limits: { fileSize: 20 * 1024 * 1024 },
 });
-const dataFile = path.join(__dirname, 'data', 'questions.json');
-const papersFile = path.join(__dirname, 'data', 'papers.json');
-const gradingsFile = path.join(__dirname, 'data', 'gradings.json');
 const port = process.env.API_PORT || 4000;
+let storageMode = 'json';
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-async function readJson(file, fallback) {
-  try {
-    const text = await fs.readFile(file, 'utf-8');
-    return JSON.parse(text);
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJson(file, rows) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(rows, null, 2), 'utf-8');
-}
-
-async function readQuestions() {
-  return readJson(dataFile, []);
-}
-
-async function writeQuestions(rows) {
-  return writeJson(dataFile, rows);
-}
-
-async function readPapers() {
-  return readJson(papersFile, []);
-}
-
-async function writePapers(rows) {
-  return writeJson(papersFile, rows);
-}
-
-async function readGradings() {
-  return readJson(gradingsFile, []);
-}
-
-async function writeGradings(rows) {
-  return writeJson(gradingsFile, rows);
-}
 
 function parseQuestions(text) {
   const sections = String(text || '').split(/(?=^[一二三四五六七八九十]+、)/m);
@@ -119,22 +80,19 @@ async function buildQrPayload({ paperId, studentId, assignmentId }) {
   };
 }
 
-app.get('/api/health', (_, res) => res.json({ ok: true, service: 'znzy-question-api', templateVersion: TEMPLATE_VERSION }));
+app.get('/api/health', async (_, res) => {
+  res.json({ ok: true, service: 'znzy-question-api', templateVersion: TEMPLATE_VERSION, storage: storageMode, ocr: 'tesseract+bubble-detect' });
+});
 
 app.get('/api/questions', async (req, res) => {
-  const rows = await readQuestions();
-  const { type, subject, keyword, knowledge } = req.query;
-  const filtered = rows.filter((q) =>
-    (!type || type === '全部' || q.type === type) &&
-    (!subject || subject === '全部' || q.subject === subject) &&
-    (!knowledge || knowledge === '全部' || q.knowledge === knowledge) &&
-    (!keyword || `${q.stem}${q.answer}${q.analysis}${q.knowledge}`.includes(keyword))
-  );
-  res.json({ data: filtered, total: filtered.length });
+  const store = await getStore();
+  const filtered = await store.listQuestions(req.query);
+  res.json({ data: filtered, total: filtered.length, storage: store.mode });
 });
 
 app.get('/api/knowledge-points', async (_, res) => {
-  const rows = await readQuestions();
+  const store = await getStore();
+  const rows = await store.listQuestions({});
   const map = new Map();
   for (const q of rows) {
     const subject = q.subject || '未分类';
@@ -146,7 +104,7 @@ app.get('/api/knowledge-points', async (_, res) => {
 });
 
 app.post('/api/questions', async (req, res) => {
-  const rows = await readQuestions();
+  const store = await getStore();
   const body = Array.isArray(req.body) ? req.body : [req.body];
   const saved = body.map((item) => ({
     id: item.id || crypto.randomUUID(),
@@ -164,24 +122,22 @@ app.post('/api/questions', async (req, res) => {
     status: '已入库',
     createdAt: item.createdAt || new Date().toISOString().slice(0, 10),
   }));
-  await writeQuestions([...saved, ...rows]);
-  res.json({ data: saved, total: rows.length + saved.length });
+  await store.createQuestions(saved);
+  const total = (await store.listQuestions({})).length;
+  res.json({ data: saved, total, storage: store.mode });
 });
 
 app.put('/api/questions/:id', async (req, res) => {
-  const rows = await readQuestions();
-  const idx = rows.findIndex((q) => q.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: '题目不存在' });
-  rows[idx] = { ...rows[idx], ...req.body, id: req.params.id, updatedAt: new Date().toISOString().slice(0, 10) };
-  await writeQuestions(rows);
-  res.json({ data: rows[idx] });
+  const store = await getStore();
+  const updated = await store.updateQuestion(req.params.id, { ...req.body, updatedAt: new Date().toISOString().slice(0, 10) });
+  if (!updated) return res.status(404).json({ message: '题目不存在' });
+  res.json({ data: updated, storage: store.mode });
 });
 
 app.delete('/api/questions/:id', async (req, res) => {
-  const rows = await readQuestions();
-  const next = rows.filter((q) => q.id !== req.params.id);
-  await writeQuestions(next);
-  res.json({ ok: true, total: next.length });
+  const store = await getStore();
+  const total = await store.deleteQuestion(req.params.id);
+  res.json({ ok: true, total, storage: store.mode });
 });
 
 app.post('/api/question-import/paste', (req, res) => {
@@ -197,7 +153,8 @@ app.post('/api/question-import/docx', upload.single('file'), async (req, res) =>
 });
 
 app.post('/api/papers/generate', async (req, res) => {
-  const rows = await readQuestions();
+  const store = await getStore();
+  const rows = await store.listQuestions({});
   const { subject, type, count = 5, knowledge, studentId, assignmentId, title } = req.body || {};
   const pool = rows.filter((q) =>
     (!subject || q.subject === subject) &&
@@ -218,32 +175,30 @@ app.post('/api/papers/generate', async (req, res) => {
     createdAt: new Date().toISOString(),
   };
   paper.answerSheetLayout = buildAnswerSheetLayout({ paperId, questions });
-  const papers = await readPapers();
-  papers.unshift(paper);
-  await writePapers(papers);
+  await store.savePaper(paper);
   const qrPayload = await buildQrPayload({ paperId, studentId, assignmentId });
   const qrDataUrl = await QRCode.toDataURL(JSON.stringify(qrPayload), { margin: 1, width: 220 });
-  res.json({ data: { ...paper, qrPayload, qrDataUrl } });
+  res.json({ data: { ...paper, qrPayload, qrDataUrl }, storage: store.mode });
 });
 
 app.get('/api/papers/:id', async (req, res) => {
-  const papers = await readPapers();
-  const paper = papers.find((p) => p.id === req.params.id);
+  const store = await getStore();
+  const paper = await store.getPaper(req.params.id);
   if (!paper) return res.status(404).json({ message: '试卷不存在' });
-  res.json({ data: paper });
+  res.json({ data: paper, storage: store.mode });
 });
 
 app.get('/api/papers/:id/answer-sheet-layout', async (req, res) => {
-  const papers = await readPapers();
-  const paper = papers.find((p) => p.id === req.params.id);
+  const store = await getStore();
+  const paper = await store.getPaper(req.params.id);
   if (!paper) return res.status(404).json({ message: '试卷不存在' });
   const layout = paper.answerSheetLayout || buildAnswerSheetLayout({ paperId: paper.id, questions: paper.questions || [] });
-  res.json({ data: layout });
+  res.json({ data: layout, storage: store.mode });
 });
 
 app.get('/api/papers/:id/qr', async (req, res) => {
-  const papers = await readPapers();
-  const paper = papers.find((p) => p.id === req.params.id);
+  const store = await getStore();
+  const paper = await store.getPaper(req.params.id);
   if (!paper) return res.status(404).json({ message: '试卷不存在' });
   const { studentId, assignmentId } = req.query;
   const qrPayload = await buildQrPayload({
@@ -260,33 +215,37 @@ app.post('/api/grading/upload', gradingUpload.single('image'), async (req, res) 
   const { paperId, studentId, assignmentId } = req.body || {};
   if (!paperId) return res.status(400).json({ message: '缺少 paperId' });
 
-  const papers = await readPapers();
-  const paper = papers.find((p) => p.id === paperId);
+  const store = await getStore();
+  const paper = await store.getPaper(paperId);
   if (!paper) return res.status(404).json({ message: '试卷不存在' });
 
-  const result = buildGradingResult({
+  const absoluteImagePath = path.join(__dirname, 'uploads', req.file.filename);
+  const layout = paper.answerSheetLayout || buildAnswerSheetLayout({ paperId: paper.id, questions: paper.questions || [] });
+  const result = await buildGradingResultFromImage({
     paper: { ...paper, assignmentId: assignmentId || paper.assignmentId },
     studentId,
+    absoluteImagePath,
     imagePath: `/uploads/${req.file.filename}`,
     imageName: req.file.originalname,
+    layout,
   });
 
-  const gradings = await readGradings();
-  gradings.unshift(result);
-  await writeGradings(gradings);
-  res.json({ data: result });
+  await store.saveGrading(result);
+  res.json({ data: result, storage: store.mode });
 });
 
 app.get('/api/grading', async (req, res) => {
-  const gradings = await readGradings();
-  const { studentId, paperId } = req.query;
-  const filtered = gradings.filter((g) =>
-    (!studentId || g.studentId === studentId) &&
-    (!paperId || g.paperId === paperId)
-  );
-  res.json({ data: filtered, total: filtered.length });
+  const store = await getStore();
+  const filtered = await store.listGradings(req.query);
+  res.json({ data: filtered, total: filtered.length, storage: store.mode });
 });
 
-app.listen(port, () => {
-  console.log(`Question API running at http://localhost:${port}`);
-});
+async function start() {
+  const store = await getStore();
+  storageMode = store.mode;
+  app.listen(port, () => {
+    console.log(`Question API running at http://localhost:${port} [storage=${storageMode}]`);
+  });
+}
+
+start();

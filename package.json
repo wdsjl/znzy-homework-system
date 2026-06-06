@@ -4,7 +4,8 @@
     "dev:api": "node server/index.cjs",
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev\"",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "db:seed": "node server/scripts/seed-db.cjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -19,7 +20,10 @@
     "cors": "latest",
     "multer": "latest",
     "concurrently": "latest",
-    "qrcode": "latest"
+    "qrcode": "latest",
+    "mysql2": "latest",
+    "sharp": "latest",
+    "tesseract.js": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

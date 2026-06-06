@@ -71,6 +71,18 @@ server/
 database-schema.sql    正式 MySQL 数据库表结构草案
 ```
 
+## 数据库
+
+默认使用 `server/data/*.json` 本地存储。配置 MySQL 后自动切换：
+
+```bash
+cp .env.example .env
+# 编辑 DATABASE_URL 或 MYSQL_* 变量
+npm run db:seed   # 首次将 questions.json 导入 MySQL
+```
+
+运行时表结构见 `server/sql/init-runtime.sql`（与 `database-schema.sql` 正式版可并行演进）。
+
 ## 后端接口
 
 - `GET /api/health`
@@ -105,7 +117,8 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 
 - 真实二维码生成（答题卡含 paperId / studentId / assignmentId）
 - 答题卡坐标映射 JSON
-- 拍照上传与模拟 OCR 自动判分 API
+- 拍照上传、图像纠偏、填涂检测与 Tesseract OCR 判分
+- MySQL 存储（未配置时 JSON 兜底）
 - 主观题 AI 初判 + 人工复核
 - 接入 MySQL / PostgreSQL
 - 接入 OSS / MinIO 文件存储
