@@ -16,7 +16,28 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pznzy"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
+
+  app:
+    build: .
+    container_name: znzy-app
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+      - "4173:4173"
+    environment:
+      API_PORT: 4000
+      ASYNC_GRADING: "1"
+      DATABASE_URL: mysql://znzy:znzy@mysql:3306/znzy_homework
+      USE_FORMAL_SCHEMA: ${USE_FORMAL_SCHEMA:-0}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - znzy_uploads:/app/server/uploads
+      - znzy_app_data:/app/server/data
 
 volumes:
   znzy_mysql_data:
+  znzy_uploads:
+  znzy_app_data:

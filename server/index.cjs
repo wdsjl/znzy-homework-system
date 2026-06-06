@@ -9,6 +9,8 @@ const { buildAnswerSheetLayout, TEMPLATE_VERSION } = require('./answerSheetLayou
 const { buildGradingResultFromImage, applyManualReview } = require('./grading.cjs');
 const { isLlmEnabled } = require('./ocr/llmGrader.cjs');
 const { getStore } = require('./store/index.cjs');
+const gradingQueue = require('./queue/gradingQueue.cjs');
+const { buildStudentProfile } = require('./services/studentProfile.cjs');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -90,9 +92,29 @@ app.get('/api/health', async (_, res) => {
     ocr: 'contour-perspective+tesseract+bubble-detect',
     llm: isLlmEnabled(),
     formalSchema: process.env.USE_FORMAL_SCHEMA === '1',
-    features: ['contour-marker', 'marker-perspective', 'subjective-ai-fuzzy', 'llm-semantic', 'manual-review', 'formal-schema'],
+    features: ['contour-marker', 'marker-perspective', 'subjective-ai-fuzzy', 'llm-semantic', 'manual-review', 'formal-schema', 'async-grading', 'student-profile'],
   });
 });
+
+async function runGradingJob(payload, onProgress) {
+  const store = await getStore();
+  onProgress?.('loading-paper', 20);
+  const paper = await store.getPaper(payload.paperId);
+  if (!paper) throw new Error('试卷不存在');
+  onProgress?.('ocr-grading', 45);
+  const layout = paper.answerSheetLayout || buildAnswerSheetLayout({ paperId: paper.id, questions: paper.questions || [] });
+  const result = await buildGradingResultFromImage({
+    paper: { ...paper, assignmentId: payload.assignmentId || paper.assignmentId },
+    studentId: payload.studentId,
+    absoluteImagePath: payload.absoluteImagePath,
+    imagePath: payload.imagePath,
+    imageName: payload.imageName,
+    layout,
+  });
+  onProgress?.('saving', 90);
+  await store.saveGrading(result);
+  return result;
+}
 
 app.get('/api/questions', async (req, res) => {
   const store = await getStore();
@@ -230,18 +252,42 @@ app.post('/api/grading/upload', gradingUpload.single('image'), async (req, res) 
   if (!paper) return res.status(404).json({ message: '试卷不存在' });
 
   const absoluteImagePath = path.join(__dirname, 'uploads', req.file.filename);
-  const layout = paper.answerSheetLayout || buildAnswerSheetLayout({ paperId: paper.id, questions: paper.questions || [] });
-  const result = await buildGradingResultFromImage({
-    paper: { ...paper, assignmentId: assignmentId || paper.assignmentId },
+  const payload = {
+    paperId,
     studentId,
+    assignmentId: assignmentId || paper.assignmentId,
     absoluteImagePath,
     imagePath: `/uploads/${req.file.filename}`,
     imageName: req.file.originalname,
-    layout,
-  });
+  };
 
-  await store.saveGrading(result);
+  const useAsync = req.query.async === '1' || process.env.ASYNC_GRADING === '1';
+  if (useAsync) {
+    const job = gradingQueue.enqueue(runGradingJob, payload);
+    return res.json({ data: { jobId: job.id, status: job.status, async: true }, storage: store.mode });
+  }
+
+  const result = await runGradingJob(payload);
   res.json({ data: result, storage: store.mode });
+});
+
+app.get('/api/grading/jobs', async (req, res) => {
+  const jobs = gradingQueue.listJobs(req.query);
+  res.json({ data: jobs, total: jobs.length });
+});
+
+app.get('/api/grading/jobs/:jobId', async (req, res) => {
+  const job = gradingQueue.getJob(req.params.jobId);
+  if (!job) return res.status(404).json({ message: '批改任务不存在' });
+  res.json({ data: job });
+});
+
+app.get('/api/students/:studentId/profile', async (req, res) => {
+  const store = await getStore();
+  const profile = await buildStudentProfile(store, req.params.studentId, {
+    studentName: req.query.studentName,
+  });
+  res.json({ data: profile, storage: store.mode });
 });
 
 app.get('/api/grading', async (req, res) => {
@@ -267,6 +313,7 @@ app.post('/api/grading/:id/review', async (req, res) => {
 });
 
 async function start() {
+  await gradingQueue.loadJobs();
   const store = await getStore();
   storageMode = store.mode;
   app.listen(port, () => {

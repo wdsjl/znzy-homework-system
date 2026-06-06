@@ -7,7 +7,10 @@
     "preview": "vite preview --host 0.0.0.0",
     "db:seed": "node server/scripts/seed-db.cjs",
     "db:up": "docker compose up -d mysql",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f app"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

@@ -113,7 +113,19 @@ USE_FORMAL_SCHEMA=1 npm run db:seed
 - `GET /api/grading`
 - `GET /api/grading/:id`
 - `POST /api/grading/:id/review`
-- `GET /api/knowledge-points`
+- `GET /api/grading/jobs`
+- `GET /api/grading/jobs/:jobId`
+- `GET /api/students/:studentId/profile`
+
+## 一键 Docker 部署
+
+```bash
+npm run docker:up     # MySQL + API + 前端预览
+npm run docker:logs
+npm run docker:down
+```
+
+访问：API `http://localhost:4000`，前端 `http://localhost:4173`
 
 ## 嵌入方式
 
@@ -124,7 +136,7 @@ USE_FORMAL_SCHEMA=1 npm run db:seed
 ></iframe>
 ```
 
-支持 URL 参数：`studentId`、`studentName`、`assignmentId`、`token`。页面会通过 `postMessage` 向宿主系统发送 `ready`、`summary-change`、`homework-graded` 等事件。
+支持 URL 参数：`studentId`、`studentName`、`assignmentId`、`token`。页面会通过 `postMessage` 向宿主系统发送 `ready`、`summary-change`、`homework-graded`、`student-profile` 等事件。
 
 小程序中可通过 `web-view` 承载 H5 页面。
 

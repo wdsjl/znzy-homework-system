@@ -13,3 +13,4 @@ pnpm-debug.log*
 server/uploads/
 server/data/papers.json
 server/data/gradings.json
+server/data/grading-jobs.json
