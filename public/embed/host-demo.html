@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>志愿填报 · 智能作业嵌入演示</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    header { padding: 16px 20px; border-bottom: 1px solid #334155; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    button, input, select { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: inherit; }
+    button { cursor: pointer; background: #2563eb; border-color: #2563eb; }
+    button.secondary { background: #334155; border-color: #475569; }
+    main { display: grid; grid-template-columns: 1fr 320px; gap: 0; min-height: calc(100vh - 57px); }
+    #embed-wrap { padding: 12px; background: #020617; }
+    aside { padding: 16px; border-left: 1px solid #334155; overflow: auto; font-size: 13px; }
+    aside h2 { margin: 0 0 8px; font-size: 14px; }
+    pre { background: #1e293b; padding: 10px; border-radius: 8px; overflow: auto; max-height: 200px; font-size: 11px; }
+    .log { margin-top: 12px; }
+    .log-item { padding: 6px 0; border-bottom: 1px solid #334155; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #334155; font-size: 11px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } aside { border-left: none; border-top: 1px solid #334155; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>志愿填报宿主 · 智能作业 web-view 演示</h1>
+    <div class="toolbar">
+      <input id="studentId" placeholder="studentId" value="stu-demo-001" />
+      <input id="classId" placeholder="classId" value="class-demo-001" />
+      <button type="button" id="btnReload">重新加载</button>
+      <button type="button" class="secondary" id="btnContext">下发宿主上下文</button>
+      <button type="button" class="secondary" id="btnProfile">打开学生画像</button>
+    </div>
+  </header>
+  <main>
+    <div id="embed-wrap"></div>
+    <aside>
+      <h2>事件日志 <span class="badge" id="status">未连接</span></h2>
+      <p>子页通过 <code>postMessage</code> 上报：<code>ready</code>、<code>summary-change</code>、<code>homework-graded</code>、<code>student-profile</code></p>
+      <div class="log" id="log"></div>
+      <h2 style="margin-top:20px">最近一次 payload</h2>
+      <pre id="lastPayload">{}</pre>
+    </aside>
+  </main>
+  <script src="/embed/znzy-host-sdk.js"></script>
+  <script>
+    var host = new ZnzyHost({ title: '智能作业系统' });
+    var logEl = document.getElementById('log');
+    var lastEl = document.getElementById('lastPayload');
+    var statusEl = document.getElementById('status');
+
+    function appendLog(type, payload) {
+      var div = document.createElement('div');
+      div.className = 'log-item';
+      div.textContent = new Date().toLocaleTimeString() + ' · ' + type;
+      logEl.prepend(div);
+      lastEl.textContent = JSON.stringify(payload || {}, null, 2);
+    }
+
+    function mountEmbed() {
+      host.unmount();
+      var studentId = document.getElementById('studentId').value.trim();
+      var classId = document.getElementById('classId').value.trim();
+      var src = ZnzyHost.buildEmbedUrl('/', {
+        embed: '1',
+        studentId: studentId,
+        classId: classId,
+        channel: 'volunteer-host-demo'
+      });
+      host.mount('#embed-wrap', src);
+      statusEl.textContent = '加载中…';
+    }
+
+    host
+      .on('ready', function (p) { statusEl.textContent = '已就绪'; appendLog('ready', p); })
+      .on('summaryChange', function (p) { appendLog('summary-change', p); })
+      .on('homeworkGraded', function (p) { appendLog('homework-graded', p); })
+      .on('studentProfile', function (p) { appendLog('student-profile', p); });
+
+    document.getElementById('btnReload').onclick = mountEmbed;
+    document.getElementById('btnContext').onclick = function () {
+      host.setHostContext({
+        studentId: document.getElementById('studentId').value.trim(),
+        classId: document.getElementById('classId').value.trim(),
+        channel: 'volunteer-host-demo',
+        features: { asyncGrading: true, studentProfile: true }
+      });
+      appendLog('host-context (out)', { sent: true });
+    };
+    document.getElementById('btnProfile').onclick = function () {
+      host.openStudentProfile(document.getElementById('studentId').value.trim());
+      appendLog('host-navigate (out)', { view: 'student-profile' });
+    };
+
+    mountEmbed();
+  </script>
+</body>
+</html>

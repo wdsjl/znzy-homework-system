@@ -9,7 +9,7 @@ const { buildAnswerSheetLayout, TEMPLATE_VERSION } = require('./answerSheetLayou
 const { buildGradingResultFromImage, applyManualReview } = require('./grading.cjs');
 const { isLlmEnabled } = require('./ocr/llmGrader.cjs');
 const { getStore } = require('./store/index.cjs');
-const gradingQueue = require('./queue/gradingQueue.cjs');
+const { initGradingQueue, getGradingQueue } = require('./queue/index.cjs');
 const { buildStudentProfile } = require('./services/studentProfile.cjs');
 
 const app = express();
@@ -30,10 +30,12 @@ const gradingUpload = multer({
 });
 const port = process.env.API_PORT || 4000;
 let storageMode = 'json';
+let queueMode = 'memory';
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/embed', express.static(path.join(__dirname, '..', 'public', 'embed')));
 
 function parseQuestions(text) {
   const sections = String(text || '').split(/(?=^[一二三四五六七八九十]+、)/m);
@@ -92,7 +94,9 @@ app.get('/api/health', async (_, res) => {
     ocr: 'contour-perspective+tesseract+bubble-detect',
     llm: isLlmEnabled(),
     formalSchema: process.env.USE_FORMAL_SCHEMA === '1',
-    features: ['contour-marker', 'marker-perspective', 'subjective-ai-fuzzy', 'llm-semantic', 'manual-review', 'formal-schema', 'async-grading', 'student-profile'],
+    asyncGrading: process.env.ASYNC_GRADING === '1',
+    gradingQueue: queueMode,
+    features: ['contour-marker', 'marker-perspective', 'subjective-ai-fuzzy', 'llm-semantic', 'manual-review', 'formal-schema', 'async-grading', 'student-profile', 'redis-queue', 'host-embed-sdk'],
   });
 });
 
@@ -263,8 +267,9 @@ app.post('/api/grading/upload', gradingUpload.single('image'), async (req, res) 
 
   const useAsync = req.query.async === '1' || process.env.ASYNC_GRADING === '1';
   if (useAsync) {
-    const job = gradingQueue.enqueue(runGradingJob, payload);
-    return res.json({ data: { jobId: job.id, status: job.status, async: true }, storage: store.mode });
+    const queue = getGradingQueue();
+    const job = await queue.enqueue(payload);
+    return res.json({ data: { jobId: job.id, status: job.status, async: true, backend: job.backend || queueMode }, storage: store.mode });
   }
 
   const result = await runGradingJob(payload);
@@ -272,12 +277,14 @@ app.post('/api/grading/upload', gradingUpload.single('image'), async (req, res) 
 });
 
 app.get('/api/grading/jobs', async (req, res) => {
-  const jobs = gradingQueue.listJobs(req.query);
-  res.json({ data: jobs, total: jobs.length });
+  const queue = getGradingQueue();
+  const jobs = await queue.listJobs(req.query);
+  res.json({ data: jobs, total: jobs.length, backend: queue.mode || queueMode });
 });
 
 app.get('/api/grading/jobs/:jobId', async (req, res) => {
-  const job = gradingQueue.getJob(req.params.jobId);
+  const queue = getGradingQueue();
+  const job = await queue.getJob(req.params.jobId);
   if (!job) return res.status(404).json({ message: '批改任务不存在' });
   res.json({ data: job });
 });
@@ -313,11 +320,12 @@ app.post('/api/grading/:id/review', async (req, res) => {
 });
 
 async function start() {
-  await gradingQueue.loadJobs();
+  const queue = await initGradingQueue(runGradingJob);
+  queueMode = queue.mode || (process.env.REDIS_URL ? 'redis' : 'memory');
   const store = await getStore();
   storageMode = store.mode;
   app.listen(port, () => {
-    console.log(`Question API running at http://localhost:${port} [storage=${storageMode}]`);
+    console.log(`Question API running at http://localhost:${port} [storage=${storageMode}, queue=${queueMode}]`);
   });
 }
 

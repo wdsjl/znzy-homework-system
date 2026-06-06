@@ -27,6 +27,30 @@ NODE
 
 wait_for_mysql
 
+wait_for_redis() {
+  if [ -z "${REDIS_URL:-}" ]; then
+    return 0
+  fi
+  echo "Waiting for Redis..."
+  for i in $(seq 1 30); do
+    if node - <<'NODE'
+const Redis = require('ioredis');
+const url = process.env.REDIS_URL;
+const client = new Redis(url, { maxRetriesPerRequest: 1, lazyConnect: true });
+client.connect().then(() => client.ping()).then(() => client.quit()).then(() => process.exit(0)).catch(() => process.exit(1));
+NODE
+    then
+      echo "Redis is ready"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Redis not ready in time" >&2
+  exit 1
+}
+
+wait_for_redis
+
 if [ -n "${DATABASE_URL:-}" ] || [ -n "${MYSQL_HOST:-}" ]; then
   npm run db:seed || true
 fi

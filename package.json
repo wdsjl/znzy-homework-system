@@ -14,27 +14,28 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "bullmq": "^5.78.0",
+    "concurrently": "latest",
+    "cors": "latest",
+    "express": "latest",
+    "lucide-react": "latest",
+    "mammoth": "latest",
+    "multer": "latest",
+    "mysql2": "latest",
+    "perspective-transform": "latest",
+    "qrcode": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
     "recharts": "latest",
-    "mammoth": "latest",
-    "express": "latest",
-    "cors": "latest",
-    "multer": "latest",
-    "concurrently": "latest",
-    "qrcode": "latest",
-    "mysql2": "latest",
     "sharp": "latest",
     "tesseract.js": "latest",
-    "perspective-transform": "latest"
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",
+    "@types/qrcode": "latest",
     "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@types/qrcode": "latest"
+    "@types/react-dom": "latest"
   }
 }
