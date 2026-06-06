@@ -81,25 +81,31 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `POST /api/question-import/paste`
 - `POST /api/question-import/docx`
 - `POST /api/papers/generate`
+- `GET /api/papers/:id`
+- `GET /api/papers/:id/answer-sheet-layout`
+- `GET /api/papers/:id/qr`
+- `POST /api/grading/upload`
+- `GET /api/grading`
 - `GET /api/knowledge-points`
 
 ## 嵌入方式
 
 ```html
 <iframe
-  src="/?embed=1&tab=analytics&studentName=张三"
+  src="/?embed=1&tab=analytics&studentName=张三&studentId=s001&assignmentId=a001&token=xxx"
   style="width:100%;height:760px;border:0;"
 ></iframe>
 ```
+
+支持 URL 参数：`studentId`、`studentName`、`assignmentId`、`token`。页面会通过 `postMessage` 向宿主系统发送 `ready`、`summary-change`、`homework-graded` 等事件。
 
 小程序中可通过 `web-view` 承载 H5 页面。
 
 ## 下一步建议
 
-- 真实二维码生成
+- 真实二维码生成（答题卡含 paperId / studentId / assignmentId）
 - 答题卡坐标映射 JSON
-- 拍照上传与图像纠偏
-- 客观题自动识别批改
+- 拍照上传与模拟 OCR 自动判分 API
 - 主观题 AI 初判 + 人工复核
 - 接入 MySQL / PostgreSQL
 - 接入 OSS / MinIO 文件存储
