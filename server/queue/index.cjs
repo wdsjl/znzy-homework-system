@@ -23,9 +23,21 @@ async function initGradingQueue(worker) {
   return queueImpl;
 }
 
+async function resetGradingQueue() {
+  if (queueImpl?.close) {
+    await queueImpl.close();
+  } else if (queueImpl?.worker?.close) {
+    await queueImpl.worker.close();
+  }
+  if (queueImpl?.queue?.close) {
+    await queueImpl.queue.close();
+  }
+  queueImpl = null;
+}
+
 function getGradingQueue() {
   if (!queueImpl) throw new Error('Grading queue not initialized');
   return queueImpl;
 }
 
-module.exports = { initGradingQueue, getGradingQueue };
+module.exports = { initGradingQueue, getGradingQueue, resetGradingQueue };

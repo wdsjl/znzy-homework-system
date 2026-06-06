@@ -10,7 +10,10 @@
     "db:down": "docker compose down",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f app"
+    "docker:logs": "docker compose logs -f app",
+    "test:e2e-grading": "node server/scripts/e2e-async-grading.cjs",
+    "test:e2e-grading:http": "node server/scripts/e2e-async-grading.cjs --http",
+    "test:e2e-grading:redis": "REDIS_URL=redis://127.0.0.1:6379 node server/scripts/e2e-async-grading.cjs --backend=redis --http"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

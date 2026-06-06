@@ -32,7 +32,9 @@
 <web-view src="{{homeworkUrl}}" bindmessage="onHomeworkMessage"></web-view>
 ```
 
-子页仍使用 `wx.miniProgram.postMessage`（项目内 `App.tsx` 已封装）；H5 宿主用 `ZnzyHost` 监听同源 `postMessage`。
+子页通过 `wx.miniProgram.postMessage`（`App.tsx` 的 `notify` 已封装）上报；H5 宿主用 `ZnzyHost` 监听 iframe `postMessage`。
+
+完整小程序示例见 [`miniprogram/README.md`](miniprogram/README.md)（含 `pages/homework/` 页面代码）。
 
 ### 3. 宿主 → 子页消息
 

@@ -115,6 +115,11 @@ function createRedisQueue(worker, redisUrl) {
       if (filter.paperId) mapped = mapped.filter((j) => j.payload?.paperId === filter.paperId);
       return mapped.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     },
+
+    async close() {
+      await bullWorker.close();
+      await queue.close();
+    },
   };
 }
 

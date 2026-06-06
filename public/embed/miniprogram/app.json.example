@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "pages/homework/homework"
+  ],
+  "window": {
+    "navigationBarTitleText": "志愿填报",
+    "navigationBarBackgroundColor": "#0f172a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f1f5f9"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}
