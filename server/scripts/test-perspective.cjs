@@ -51,6 +51,8 @@ async function main() {
     ok: true,
     canonical: prep.canonical,
     detectedCount: prep.markerDetection.detectedCount,
+    contourCount: prep.markerDetection.contourCount,
+    detectionMethod: prep.markerDetection.detectionMethod,
     preprocessing: prep.preprocessing,
     corrected: prep.correctedRelativePath,
   }, null, 2));

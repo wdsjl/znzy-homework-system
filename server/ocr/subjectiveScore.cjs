@@ -119,4 +119,19 @@ function scoreSubjectiveAnswer({ expected, detected, fullScore, questionType }) 
   };
 }
 
-module.exports = { scoreSubjectiveAnswer, similarityRatio, normalizeText };
+async function scoreSubjectiveWithAi(params) {
+  const fuzzy = scoreSubjectiveAnswer(params);
+  const { shouldUseLlm, scoreWithLlm } = require('./llmGrader.cjs');
+  if (!shouldUseLlm({ questionType: params.questionType, fuzzyResult: fuzzy })) return fuzzy;
+  const llm = await scoreWithLlm({
+    stem: params.stem,
+    expected: params.expected,
+    detected: params.detected,
+    fullScore: params.fullScore,
+    questionType: params.questionType,
+    analysis: params.analysis,
+  });
+  return llm || fuzzy;
+}
+
+module.exports = { scoreSubjectiveAnswer, scoreSubjectiveWithAi, similarityRatio, normalizeText };

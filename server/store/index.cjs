@@ -1,5 +1,6 @@
 const { createJsonStore } = require('./jsonStore.cjs');
 const { createMysqlStore } = require('./mysqlStore.cjs');
+const { createFormalMysqlStore } = require('./formalMysqlStore.cjs');
 
 let storePromise;
 
@@ -32,9 +33,10 @@ async function createStore() {
           };
       const pool = mysql.createPool({ ...config, waitForConnections: true, connectionLimit: 10 });
       await pool.query('SELECT 1');
-      const store = createMysqlStore(pool);
+      const useFormal = process.env.USE_FORMAL_SCHEMA === '1';
+      const store = useFormal ? createFormalMysqlStore(pool) : createMysqlStore(pool);
       await store.init();
-      console.log(`Storage: MySQL (${config.host}/${config.database})`);
+      console.log(`Storage: ${useFormal ? 'MySQL formal schema' : 'MySQL runtime'} (${config.host}/${config.database})`);
       return store;
     } catch (err) {
       console.warn('MySQL unavailable, falling back to JSON storage:', err.message);

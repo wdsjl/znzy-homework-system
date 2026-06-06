@@ -1,3 +1,5 @@
+const { detectMarkersByContour } = require('./contourDetect.cjs');
+
 const CANONICAL = { widthMm: 210, heightMm: 297 };
 const ANCHOR_MM = {
   tl: { x: 20, y: 20 },
@@ -33,7 +35,19 @@ function centroidInRegion(data, width, height, channels, x0, y0, x1, y1, thresho
   return { x: sumX / count, y: sumY / count, weight: count };
 }
 
-function detectCorner(data, width, height, channels, corner) {
+function fallbackCorner(width, height, corner) {
+  const searchW = width * 0.28;
+  const searchH = height * 0.28;
+  const map = {
+    tl: { x: searchW * 0.35, y: searchH * 0.35 },
+    tr: { x: width - searchW * 0.35, y: searchH * 0.35 },
+    bl: { x: searchW * 0.35, y: height - searchH * 0.35 },
+    br: { x: width - searchW * 0.35, y: height - searchH * 0.35 },
+  };
+  return { ...map[corner], detected: false, method: 'fallback' };
+}
+
+function detectCornerCentroid(data, width, height, channels, corner) {
   const searchW = width * 0.28;
   const searchH = height * 0.28;
   let x0;
@@ -52,30 +66,38 @@ function detectCorner(data, width, height, channels, corner) {
   }
 
   const found = centroidInRegion(data, width, height, channels, x0, y0, x1, y1);
-  if (!found) {
-    const fallback = {
-      tl: { x: searchW * 0.35, y: searchH * 0.35 },
-      tr: { x: width - searchW * 0.35, y: searchH * 0.35 },
-      bl: { x: searchW * 0.35, y: height - searchH * 0.35 },
-      br: { x: width - searchW * 0.35, y: height - searchH * 0.35 },
-    };
-    return { ...fallback[corner], detected: false };
-  }
-
-  return { x: found.x, y: found.y, detected: true, weight: found.weight };
+  if (!found) return fallbackCorner(width, height, corner);
+  return { x: found.x, y: found.y, detected: true, weight: found.weight, method: 'centroid' };
 }
 
-function detectMarkersFromRaw({ data, width, height, channels }) {
-  const tl = detectCorner(data, width, height, channels, 'tl');
-  const tr = detectCorner(data, width, height, channels, 'tr');
-  const br = detectCorner(data, width, height, channels, 'br');
-  const bl = detectCorner(data, width, height, channels, 'bl');
-  const detectedCount = [tl, tr, br, bl].filter((p) => p.detected).length;
+function mergeCorner(contourPoint, centroidPoint, width, height, corner) {
+  if (contourPoint?.detected) return contourPoint;
+  if (centroidPoint?.detected) return centroidPoint;
+  return fallbackCorner(width, height, corner);
+}
+
+function detectMarkersFromRaw(frame) {
+  const { data, width, height, channels } = frame;
+  const contour = detectMarkersByContour(frame);
+  const corners = ['tl', 'tr', 'br', 'bl'];
+  const points = {};
+
+  for (const corner of corners) {
+    const centroid = detectCornerCentroid(data, width, height, channels, corner);
+    points[corner] = mergeCorner(contour.points[corner], centroid, width, height, corner);
+  }
+
+  const detectedCount = corners.filter((c) => points[c].detected).length;
+  const contourCount = corners.filter((c) => points[c].method === 'contour').length;
+
   return {
-    points: { tl, tr, br, bl },
+    points,
     detectedCount,
+    contourCount,
     reliable: detectedCount >= 2,
-    highConfidence: detectedCount >= 3,
+    highConfidence: detectedCount >= 3 && contourCount >= 2,
+    detectionMethod: contourCount >= 2 ? 'contour+blob' : detectedCount >= 2 ? 'centroid-mix' : 'fallback',
+    contourThreshold: contour.threshold,
   };
 }
 

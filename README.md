@@ -85,6 +85,17 @@ npm run dev:all
 
 运行时表结构见 `server/sql/init-runtime.sql`（与 `database-schema.sql` 正式版可并行演进）。
 
+启用正式 schema：
+
+```bash
+USE_FORMAL_SCHEMA=1 npm run db:up
+USE_FORMAL_SCHEMA=1 npm run db:seed
+```
+
+## LLM 语义判分
+
+配置 `LLM_API_KEY` 后，解答题及低相似度主观题会调用 OpenAI 兼容接口进行语义判分；未配置时自动使用模糊相似度算法。
+
 ## 后端接口
 
 - `GET /api/health`

@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { buildAnswerSheetLayout, TEMPLATE_VERSION } = require('./answerSheetLayout.cjs');
 const { buildGradingResultFromImage, applyManualReview } = require('./grading.cjs');
+const { isLlmEnabled } = require('./ocr/llmGrader.cjs');
 const { getStore } = require('./store/index.cjs');
 
 const app = express();
@@ -86,8 +87,10 @@ app.get('/api/health', async (_, res) => {
     service: 'znzy-question-api',
     templateVersion: TEMPLATE_VERSION,
     storage: storageMode,
-    ocr: 'perspective-warp+tesseract+bubble-detect',
-    features: ['marker-perspective', 'subjective-ai-fuzzy', 'manual-review'],
+    ocr: 'contour-perspective+tesseract+bubble-detect',
+    llm: isLlmEnabled(),
+    formalSchema: process.env.USE_FORMAL_SCHEMA === '1',
+    features: ['contour-marker', 'marker-perspective', 'subjective-ai-fuzzy', 'llm-semantic', 'manual-review', 'formal-schema'],
   });
 });
 

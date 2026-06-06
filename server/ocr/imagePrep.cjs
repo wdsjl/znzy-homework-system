@@ -41,7 +41,9 @@ async function prepareAnswerSheetImage(inputPath, outputDir) {
     canonical: markerResult.reliable,
     markerDetection: {
       detectedCount: markerResult.detectedCount,
+      contourCount: markerResult.contourCount,
       highConfidence: markerResult.highConfidence,
+      detectionMethod: markerResult.detectionMethod,
       points: markerResult.points,
     },
     preprocessing: [...preprocessing, 'grayscale', 'normalize', 'sharpen'],

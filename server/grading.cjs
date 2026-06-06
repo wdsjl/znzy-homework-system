@@ -3,7 +3,8 @@ const path = require('path');
 const { prepareAnswerSheetImage } = require('./ocr/imagePrep.cjs');
 const { detectChoiceAnswer } = require('./ocr/bubbleDetect.cjs');
 const { recognizeTextRegion } = require('./ocr/textOcr.cjs');
-const { scoreSubjectiveAnswer } = require('./ocr/subjectiveScore.cjs');
+const { scoreSubjectiveAnswer, scoreSubjectiveWithAi } = require('./ocr/subjectiveScore.cjs');
+const { isLlmEnabled } = require('./ocr/llmGrader.cjs');
 
 function normalizeAnswer(answer) {
   return String(answer || '')
@@ -168,11 +169,13 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
         detectedAnswer = '识别不清';
         ocrConfidence = 0.2;
       }
-      scored = scoreSubjectiveAnswer({
+      scored = await scoreSubjectiveWithAi({
+        stem: q.stem,
         expected: q.answer,
         detected: detectedAnswer,
         fullScore: q.score,
         questionType: q.type,
+        analysis: q.analysis,
       });
     } else if (isObjective(q.type)) {
       const options = q.type.includes('判断') ? ['√', '×'] : ['A', 'B', 'C', 'D'];
@@ -182,7 +185,7 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
     } else {
       detectedAnswer = '识别不清';
       ocrConfidence = 0.2;
-      scored = scoreSubjectiveAnswer({ expected: q.answer, detected: detectedAnswer, fullScore: q.score, questionType: q.type });
+      scored = await scoreSubjectiveWithAi({ stem: q.stem, expected: q.answer, detected: detectedAnswer, fullScore: q.score, questionType: q.type, analysis: q.analysis });
     }
 
     earned += scored.score;
@@ -200,10 +203,16 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
       reviewSuggested: scored.reviewSuggested || false,
       aiVerdict: scored.aiVerdict || null,
       similarity: scored.similarity ?? null,
+      scoringMode: scored.scoringMode || null,
       manualScore: null,
       reviewComment: '',
     });
   }
+
+  const usedLlm = details.some((d) => d.scoringMode === 'llm');
+  const gradingMode = prep.canonical
+    ? (usedLlm ? 'ocr-perspective+llm' : 'ocr-perspective')
+    : (usedLlm ? 'ocr+llm' : 'ocr');
 
   return buildGradingResult({
     paper,
@@ -211,7 +220,7 @@ async function buildGradingResultFromImage({ paper, studentId, absoluteImagePath
     imagePath,
     imageName,
     correctedImagePath: prep.correctedRelativePath,
-    mode: prep.canonical ? 'ocr-perspective' : 'ocr',
+    mode: gradingMode,
     details,
     earnedScore: earned,
     totalScore: total,
