@@ -60,6 +60,7 @@ node server/index.cjs &
 API_PID=$!
 
 echo "Starting web preview on :4173"
+export VITE_API_PROXY="http://127.0.0.1:${API_PORT:-4000}"
 npm run preview -- --host 0.0.0.0 --port 4173 &
 WEB_PID=$!
 

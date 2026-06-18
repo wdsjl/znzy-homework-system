@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>智能作业 H5 · 独立测试入口</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(160deg, #eef4ff, #f8fafc 40%, #eef2ff);
+      color: #0f172a;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin: 0 0 8px; }
+    .sub { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+    }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .status { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; }
+    .status.ok { background: #dcfce7; color: #166534; }
+    .status.fail { background: #fee2e2; color: #991b1b; }
+    .status.wait { background: #e2e8f0; color: #475569; }
+    a.btn {
+      display: block;
+      text-decoration: none;
+      text-align: center;
+      padding: 14px 16px;
+      margin: 10px 0;
+      border-radius: 12px;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 600;
+    }
+    a.btn.secondary { background: #f1f5f9; color: #1e293b; border: 1px solid #e2e8f0; }
+    code, pre {
+      background: #f8fafc;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    code { padding: 2px 6px; }
+    pre { padding: 12px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+    label { display: block; font-size: 13px; color: #64748b; margin: 8px 0 4px; }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font: inherit;
+    }
+    .hint { font-size: 13px; color: #64748b; line-height: 1.6; margin-top: 8px; }
+    ol { padding-left: 20px; font-size: 14px; line-height: 1.8; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>智能作业 H5 · 独立测试</h1>
+    <p class="sub">不依赖 iframe / 小程序，直接打开主应用进行功能验证。</p>
+
+    <div class="card">
+      <h2>服务状态 <span id="healthBadge" class="status wait">检测中…</span></h2>
+      <pre id="healthJson">正在请求 /api/health …</pre>
+    </div>
+
+    <div class="card">
+      <h2>测试参数（可改）</h2>
+      <label>studentId</label>
+      <input id="studentId" value="stu-test-001" />
+      <label>studentName</label>
+      <input id="studentName" value="测试学生" />
+      <label>classId</label>
+      <input id="classId" value="class-test-001" />
+    </div>
+
+    <div class="card">
+      <h2>进入测试</h2>
+      <a class="btn" id="openFull" href="/">打开完整 H5（推荐）</a>
+      <a class="btn secondary" id="openHomework" href="/">智能作业</a>
+      <a class="btn secondary" id="openGrading" href="/?tab=grading">拍照批改</a>
+      <a class="btn secondary" id="openAnalytics" href="/?tab=analytics">学情报告</a>
+      <p class="hint">建议流程：智能作业 → 生成题目 → 打印/答题卡 → 拍照批改 → 学情报告。</p>
+    </div>
+
+    <div class="card">
+      <h2>本地启动命令</h2>
+      <pre>npm install
+npm run dev:standalone   # 前端 :5173 + API :4000，/api 自动代理</pre>
+      <p class="hint">Docker 一键：<code>npm run docker:up</code>，然后访问 <code>http://localhost:4173/standalone-test.html</code></p>
+    </div>
+
+    <div class="card">
+      <h2>独立 H5 测试清单</h2>
+      <ol>
+        <li>本页 API 状态为绿色「正常」</li>
+        <li>打开完整 H5，左侧可切换模块</li>
+        <li>「智能作业」生成试卷并查看答题卡</li>
+        <li>「拍照批改」上传答题卡照片，观察异步进度</li>
+        <li>「学情报告」查看趋势与薄弱点</li>
+      </ol>
+    </div>
+  </div>
+  <script>
+    function qs(params) {
+      return Object.keys(params)
+        .filter(function (k) { return params[k]; })
+        .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); })
+        .join('&');
+    }
+
+    function buildLinks() {
+      var p = {
+        studentId: document.getElementById('studentId').value.trim(),
+        studentName: document.getElementById('studentName').value.trim(),
+        classId: document.getElementById('classId').value.trim(),
+        channel: 'standalone-h5'
+      };
+      var base = '/?' + qs(p);
+      document.getElementById('openFull').href = base;
+      document.getElementById('openHomework').href = base + '&tab=homework';
+      document.getElementById('openGrading').href = base + '&tab=grading';
+      document.getElementById('openAnalytics').href = base + '&tab=analytics';
+    }
+
+    ['studentId', 'studentName', 'classId'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', buildLinks);
+    });
+    buildLinks();
+
+    fetch('/api/health')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        document.getElementById('healthJson').textContent = JSON.stringify(data, null, 2);
+        var badge = document.getElementById('healthBadge');
+        badge.textContent = data.ok ? 'API 正常 · ' + (data.gradingQueue || 'queue') : '异常';
+        badge.className = 'status ' + (data.ok ? 'ok' : 'fail');
+      })
+      .catch(function (err) {
+        document.getElementById('healthJson').textContent = String(err);
+        var badge = document.getElementById('healthBadge');
+        badge.textContent = 'API 不可达';
+        badge.className = 'status fail';
+      });
+  </script>
+</body>
+</html>

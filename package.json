@@ -1,6 +1,7 @@
 {
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:standalone": "concurrently \"npm run dev:api\" \"vite --host 0.0.0.0 --mode standalone\"",
     "dev:api": "node server/index.cjs",
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev\"",
     "build": "tsc -b && vite build",
