@@ -32,7 +32,12 @@ const port = process.env.API_PORT || 4000;
 let storageMode = 'json';
 let queueMode = 'memory';
 
-app.use(cors());
+const corsOrigin = process.env.CORS_ORIGIN || '';
+const corsOptions = corsOrigin
+  ? { origin: corsOrigin.split(',').map((s) => s.trim()).filter(Boolean), credentials: true }
+  : {};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/embed', express.static(path.join(__dirname, '..', 'public', 'embed')));
@@ -96,6 +101,7 @@ app.get('/api/health', async (_, res) => {
     formalSchema: process.env.USE_FORMAL_SCHEMA === '1',
     asyncGrading: process.env.ASYNC_GRADING === '1',
     gradingQueue: queueMode,
+    publicOrigin: process.env.PUBLIC_ORIGIN || null,
     features: ['contour-marker', 'marker-perspective', 'subjective-ai-fuzzy', 'llm-semantic', 'manual-review', 'formal-schema', 'async-grading', 'student-profile', 'redis-queue', 'host-embed-sdk'],
   });
 });

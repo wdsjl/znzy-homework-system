@@ -63,7 +63,7 @@
 <body>
   <div class="wrap">
     <h1>智能作业 H5 · 独立测试</h1>
-    <p class="sub">不依赖 iframe / 小程序，直接打开主应用进行功能验证。</p>
+    <p class="sub">生产域名：<strong id="prodDomain">znzy.lhyun.net</strong> · 不依赖 iframe / 小程序</p>
 
     <div class="card">
       <h2>服务状态 <span id="healthBadge" class="status wait">检测中…</span></h2>
@@ -93,7 +93,8 @@
       <h2>本地启动命令</h2>
       <pre>npm install
 npm run dev:standalone   # 前端 :5173 + API :4000，/api 自动代理</pre>
-      <p class="hint">Docker 一键：<code>npm run docker:up</code>，然后访问 <code>http://localhost:4173/standalone-test.html</code></p>
+      <p class="hint">生产环境：<code>https://znzy.lhyun.net/standalone-test.html</code></p>
+      <p class="hint">Docker 生产：<code>npm run deploy:znzy</code>（服务器执行）</p>
     </div>
 
     <div class="card">

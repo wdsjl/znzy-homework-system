@@ -11,9 +11,11 @@ RUN npm ci
 
 COPY . .
 ARG VITE_API_BASE=/api
+ARG VITE_PUBLIC_ORIGIN=https://znzy.lhyun.net
 ENV VITE_API_BASE=$VITE_API_BASE
+ENV VITE_PUBLIC_ORIGIN=$VITE_PUBLIC_ORIGIN
 RUN npm run build \
-  && chmod +x docker/entrypoint.sh
+  && chmod +x docker/entrypoint.sh docker/entrypoint-api.sh
 
 ENV API_PORT=4000
 ENV ASYNC_GRADING=1

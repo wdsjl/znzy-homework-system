@@ -12,6 +12,10 @@
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f app",
+    "docker:prod:up": "docker compose -f docker-compose.prod.yml up -d --build",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker compose -f docker-compose.prod.yml logs -f web api",
+    "deploy:znzy": "bash deploy/znzy.lhyun.net.sh",
     "test:e2e-grading": "node server/scripts/e2e-async-grading.cjs",
     "test:e2e-grading:http": "node server/scripts/e2e-async-grading.cjs --http",
     "test:e2e-grading:redis": "REDIS_URL=redis://127.0.0.1:6379 node server/scripts/e2e-async-grading.cjs --backend=redis --http"
