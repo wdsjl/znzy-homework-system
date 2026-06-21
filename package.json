@@ -1,1 +1,50 @@
-{"scripts":{"dev":"vite --host 0.0.0.0","dev:api":"node server/index.cjs","dev:all":"concurrently \"npm run dev:api\" \"npm run dev\"","build":"tsc -b && vite build","preview":"vite preview --host 0.0.0.0"},"dependencies":{"@vitejs/plugin-react":"latest","vite":"latest","typescript":"latest","react":"latest","react-dom":"latest","lucide-react":"latest","recharts":"latest","mammoth":"latest","express":"latest","cors":"latest","multer":"latest","concurrently":"latest"},"devDependencies":{"@types/node":"latest","@types/react":"latest","@types/react-dom":"latest"}}
+{
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:standalone": "concurrently \"npm run dev:api\" \"vite --host 0.0.0.0 --mode standalone\"",
+    "dev:api": "node server/index.cjs",
+    "dev:all": "concurrently \"npm run dev:api\" \"npm run dev\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "db:seed": "node server/scripts/seed-db.cjs",
+    "db:up": "docker compose up -d mysql",
+    "db:down": "docker compose down",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f app",
+    "docker:prod:up": "docker compose -f docker-compose.prod.yml up -d --build",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker compose -f docker-compose.prod.yml logs -f web api",
+    "deploy:znzy": "bash deploy/znzy.lhyun.net.sh",
+    "deploy:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File deploy/windows/install-pm2.ps1",
+    "test:e2e-grading": "node server/scripts/e2e-async-grading.cjs",
+    "test:e2e-grading:http": "node server/scripts/e2e-async-grading.cjs --http",
+    "test:e2e-grading:redis": "REDIS_URL=redis://127.0.0.1:6379 node server/scripts/e2e-async-grading.cjs --backend=redis --http"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "bullmq": "^5.78.0",
+    "concurrently": "latest",
+    "cors": "latest",
+    "express": "latest",
+    "lucide-react": "latest",
+    "mammoth": "latest",
+    "multer": "latest",
+    "mysql2": "latest",
+    "perspective-transform": "latest",
+    "qrcode": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "recharts": "latest",
+    "sharp": "latest",
+    "tesseract.js": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/qrcode": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
+  }
+}

@@ -71,6 +71,31 @@ server/
 database-schema.sql    正式 MySQL 数据库表结构草案
 ```
 
+## 数据库
+
+默认使用 `server/data/*.json` 本地存储。配置 MySQL 后自动切换：
+
+```bash
+cp .env.example .env
+npm run db:up          # Docker 启动 MySQL
+# DATABASE_URL=mysql://znzy:znzy@127.0.0.1:3306/znzy_homework
+npm run db:seed        # 首次导入 questions.json
+npm run dev:all
+```
+
+运行时表结构见 `server/sql/init-runtime.sql`（与 `database-schema.sql` 正式版可并行演进）。
+
+启用正式 schema：
+
+```bash
+USE_FORMAL_SCHEMA=1 npm run db:up
+USE_FORMAL_SCHEMA=1 npm run db:seed
+```
+
+## LLM 语义判分
+
+配置 `LLM_API_KEY` 后，解答题及低相似度主观题会调用 OpenAI 兼容接口进行语义判分；未配置时自动使用模糊相似度算法。
+
 ## 后端接口
 
 - `GET /api/health`
@@ -81,25 +106,46 @@ database-schema.sql    正式 MySQL 数据库表结构草案
 - `POST /api/question-import/paste`
 - `POST /api/question-import/docx`
 - `POST /api/papers/generate`
-- `GET /api/knowledge-points`
+- `GET /api/papers/:id`
+- `GET /api/papers/:id/answer-sheet-layout`
+- `GET /api/papers/:id/qr`
+- `POST /api/grading/upload`
+- `GET /api/grading`
+- `GET /api/grading/:id`
+- `POST /api/grading/:id/review`
+- `GET /api/grading/jobs`
+- `GET /api/grading/jobs/:jobId`
+- `GET /api/students/:studentId/profile`
+
+## 一键 Docker 部署
+
+```bash
+npm run docker:up     # MySQL + API + 前端预览
+npm run docker:logs
+npm run docker:down
+```
+
+访问：API `http://localhost:4000`，前端 `http://localhost:4173`
 
 ## 嵌入方式
 
 ```html
 <iframe
-  src="/?embed=1&tab=analytics&studentName=张三"
+  src="/?embed=1&tab=analytics&studentName=张三&studentId=s001&assignmentId=a001&token=xxx"
   style="width:100%;height:760px;border:0;"
 ></iframe>
 ```
+
+支持 URL 参数：`studentId`、`studentName`、`assignmentId`、`token`。页面会通过 `postMessage` 向宿主系统发送 `ready`、`summary-change`、`homework-graded`、`student-profile` 等事件。
 
 小程序中可通过 `web-view` 承载 H5 页面。
 
 ## 下一步建议
 
-- 真实二维码生成
+- 真实二维码生成（答题卡含 paperId / studentId / assignmentId）
 - 答题卡坐标映射 JSON
-- 拍照上传与图像纠偏
-- 客观题自动识别批改
+- 拍照上传、图像纠偏、填涂检测与 Tesseract OCR 判分
+- MySQL 存储（未配置时 JSON 兜底）
 - 主观题 AI 初判 + 人工复核
 - 接入 MySQL / PostgreSQL
 - 接入 OSS / MinIO 文件存储

@@ -1,0 +1,68 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: znzy-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: znzy
+      MYSQL_DATABASE: znzy_homework
+      MYSQL_USER: znzy
+      MYSQL_PASSWORD: znzy
+    volumes:
+      - znzy_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pznzy"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: znzy-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    container_name: znzy-api
+    restart: unless-stopped
+    entrypoint: ["/usr/bin/tini", "--", "./docker/entrypoint-api.sh"]
+    environment:
+      API_PORT: 4000
+      ASYNC_GRADING: "1"
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: mysql://znzy:znzy@mysql:3306/znzy_homework
+      CORS_ORIGIN: https://znzy.lhyun.net
+      PUBLIC_ORIGIN: https://znzy.lhyun.net
+      USE_FORMAL_SCHEMA: ${USE_FORMAL_SCHEMA:-0}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - znzy_uploads:/app/server/uploads
+      - znzy_app_data:/app/server/data
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+      args:
+        VITE_API_BASE: /api
+        VITE_PUBLIC_ORIGIN: https://znzy.lhyun.net
+    container_name: znzy-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - api
+
+volumes:
+  znzy_mysql_data:
+  znzy_uploads:
+  znzy_app_data:

@@ -1,0 +1,26 @@
+<view class="page">
+  <view class="header">
+    <text class="title">志愿填报 · 智能作业</text>
+    <text class="sub">web-view 嵌入示例（需配置业务域名）</text>
+  </view>
+
+  <view class="toolbar">
+    <input class="input" placeholder="studentId" value="{{studentId}}" bindinput="onStudentIdInput" />
+    <input class="input" placeholder="classId" value="{{classId}}" bindinput="onClassIdInput" />
+    <button size="mini" type="primary" bindtap="reloadWebView">重新加载</button>
+  </view>
+
+  <web-view wx:if="{{homeworkUrl}}" src="{{homeworkUrl}}" bindmessage="onHomeworkMessage"></web-view>
+
+  <view class="log-panel">
+    <view class="log-title">宿主收到的事件（bindmessage）</view>
+    <view wx:if="{{messages.length === 0}}" class="empty">暂无消息。子页会在分享/返回等时机批量上报。</view>
+    <block wx:for="{{messages}}" wx:key="index">
+      <view class="log-item">
+        <text class="log-type">{{item.type}}</text>
+        <text class="log-time">{{item.time}}</text>
+        <text class="log-body">{{item.summary}}</text>
+      </view>
+    </block>
+  </view>
+</view>
