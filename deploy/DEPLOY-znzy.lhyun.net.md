@@ -122,6 +122,20 @@ docker compose -f docker-compose.prod.yml ps
 
 ---
 
+## Windows Nginx 部署（sa/door 同服务器）
+
+若使用 **Windows + C:/nginx** 反代模式，见：
+
+**`deploy/windows/README.md`**
+
+快速步骤：
+1. 粘贴 `deploy/windows/nginx-znzy.snippet.conf` 到 `nginx.conf`
+2. 证书放到 `C:/nginx/cert/znzy.lhyun.net.pem`
+3. 运行 `deploy/windows/install-pm2.ps1`
+4. `nginx -s reload`
+
+---
+
 ## 八、你需要改的配置（可选）
 
 | 变量 | 文件 | 说明 |

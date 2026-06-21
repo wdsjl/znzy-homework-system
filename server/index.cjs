@@ -325,13 +325,26 @@ app.post('/api/grading/:id/review', async (req, res) => {
   res.json({ data: reviewed, storage: store.mode });
 });
 
+if (process.env.SERVE_STATIC === '1') {
+  const distPath = path.join(__dirname, '..', 'dist');
+  app.use(express.static(distPath));
+  app.get(/^(?!\/api|\/uploads|\/embed).*/, (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const indexFile = path.join(distPath, 'index.html');
+    res.sendFile(indexFile, (err) => {
+      if (err) next(err);
+    });
+  });
+}
+
 async function start() {
   const queue = await initGradingQueue(runGradingJob);
   queueMode = queue.mode || (process.env.REDIS_URL ? 'redis' : 'memory');
   const store = await getStore();
   storageMode = store.mode;
   app.listen(port, () => {
-    console.log(`Question API running at http://localhost:${port} [storage=${storageMode}, queue=${queueMode}]`);
+    const mode = process.env.SERVE_STATIC === '1' ? 'h5+api' : 'api';
+    console.log(`Question API running at http://localhost:${port} [mode=${mode}, storage=${storageMode}, queue=${queueMode}]`);
   });
 }
 
