@@ -3,6 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { buildAnswerSheetLayout, TEMPLATE_VERSION } = require('./answerSheetLayout.cjs');
@@ -31,6 +32,10 @@ const gradingUpload = multer({
 const port = process.env.API_PORT || 4000;
 let storageMode = 'json';
 let queueMode = 'memory';
+let h5StaticMode = 'off';
+
+const distPath = path.join(__dirname, '..', 'dist');
+const publicPath = path.join(__dirname, '..', 'public');
 
 const corsOrigin = process.env.CORS_ORIGIN || '';
 const corsOptions = corsOrigin
@@ -102,6 +107,10 @@ app.get('/api/health', async (_, res) => {
     asyncGrading: process.env.ASYNC_GRADING === '1',
     gradingQueue: queueMode,
     publicOrigin: process.env.PUBLIC_ORIGIN || null,
+    serveStatic: h5StaticMode,
+    distIndex: fs.existsSync(path.join(distPath, 'index.html')),
+    standaloneTest: fs.existsSync(path.join(distPath, 'standalone-test.html'))
+      || fs.existsSync(path.join(publicPath, 'standalone-test.html')),
     features: ['contour-marker', 'marker-perspective', 'subjective-ai-fuzzy', 'llm-semantic', 'manual-review', 'formal-schema', 'async-grading', 'student-profile', 'redis-queue', 'host-embed-sdk'],
   });
 });
@@ -325,17 +334,48 @@ app.post('/api/grading/:id/review', async (req, res) => {
   res.json({ data: reviewed, storage: store.mode });
 });
 
-if (process.env.SERVE_STATIC === '1') {
-  const distPath = path.join(__dirname, '..', 'dist');
-  app.use(express.static(distPath));
-  app.get(/^(?!\/api|\/uploads|\/embed).*/, (req, res, next) => {
+function sendFirstExisting(res, candidates, notFoundMessage) {
+  for (const file of candidates) {
+    if (fs.existsSync(file)) {
+      return res.sendFile(file);
+    }
+  }
+  return res.status(404).send(notFoundMessage);
+}
+
+function mountStaticH5() {
+  app.get('/standalone-test.html', (_, res) => {
+    sendFirstExisting(res, [
+      path.join(distPath, 'standalone-test.html'),
+      path.join(publicPath, 'standalone-test.html'),
+    ], 'standalone-test.html not found. Run: npm run build');
+  });
+
+  const wantFullStatic = process.env.SERVE_STATIC === '1'
+    || (process.env.SERVE_STATIC !== '0' && fs.existsSync(path.join(distPath, 'index.html')));
+
+  if (!wantFullStatic) {
+    h5StaticMode = 'api-only';
+    return;
+  }
+
+  h5StaticMode = process.env.SERVE_STATIC === '1' ? 'full' : 'auto';
+  app.use(express.static(distPath, { index: false }));
+  app.use(express.static(publicPath, { index: false }));
+
+  app.get(/^\/(?!api|uploads|embed).*/, (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     const indexFile = path.join(distPath, 'index.html');
-    res.sendFile(indexFile, (err) => {
+    if (!fs.existsSync(indexFile)) {
+      return res.status(503).send('H5 not built. Run: npm run build');
+    }
+    return res.sendFile(indexFile, (err) => {
       if (err) next(err);
     });
   });
 }
+
+mountStaticH5();
 
 async function start() {
   const queue = await initGradingQueue(runGradingJob);
@@ -343,8 +383,7 @@ async function start() {
   const store = await getStore();
   storageMode = store.mode;
   app.listen(port, () => {
-    const mode = process.env.SERVE_STATIC === '1' ? 'h5+api' : 'api';
-    console.log(`Question API running at http://localhost:${port} [mode=${mode}, storage=${storageMode}, queue=${queueMode}]`);
+    console.log(`Question API running at http://localhost:${port} [h5=${h5StaticMode}, storage=${storageMode}, queue=${queueMode}]`);
   });
 }
 

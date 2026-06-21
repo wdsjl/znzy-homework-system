@@ -43,16 +43,28 @@ pm2 start $ecosystem --update-env
 if ($LASTEXITCODE -ne 0) { throw "pm2 start failed" }
 
 pm2 save
-Say "==> [5/6] waiting for http://127.0.0.1:3200/api/health ..."
+Say "==> [6/6] checking endpoints..."
 Start-Sleep -Seconds 3
 
 try {
   $health = Invoke-RestMethod -Uri "http://127.0.0.1:3200/api/health" -TimeoutSec 15
-  Say "==> [6/6] OK local health check passed" "Green"
-  Say ("    storage=" + $health.storage + " queue=" + $health.gradingQueue) "Green"
+  Say "    health OK storage=$($health.storage) h5=$($health.serveStatic)" "Green"
+  if (-not $health.standaloneTest) {
+    Say "    WARN standalone-test.html missing in dist/public" "Yellow"
+  }
 } catch {
-  Say "==> [6/6] WARN local health check failed" "Yellow"
-  Say "    run: pm2 logs znzy-homework --lines 50" "Yellow"
+  Say "    health check FAILED" "Red"
+  pm2 logs znzy-homework --lines 30 --nostream
+  throw $_
+}
+
+try {
+  $r = Invoke-WebRequest -Uri "http://127.0.0.1:3200/standalone-test.html" -UseBasicParsing -TimeoutSec 10
+  if ($r.StatusCode -eq 200) {
+    Say "    standalone-test.html OK" "Green"
+  }
+} catch {
+  Say "    standalone-test.html FAILED - run: npm run build && pm2 restart znzy-homework" "Red"
   throw $_
 }
 
